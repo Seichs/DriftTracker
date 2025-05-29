@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drift Predictor - KairoDrift</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-velocity/dist/leaflet-velocity.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+<div class="container">
+    <aside class="sidebar">
+        <h2>Ocean Drift Predictor</h2>
+
+        <form action="/predict" method="post">
+            <div class="input-section">
+                <h3>Input Parameters</h3>
+
+                <div class="form-group">
+                    <label for="lat"><i class="fas fa-map-marker-alt"></i> Latitude:</label>
+                    <input type="number" name="lat" id="lat" step="0.000001" value="34.0" placeholder="e.g., 34.05" />
+                </div>
+
+                <div class="form-group">
+                    <label for="lon"><i class="fas fa-map-pin"></i> Longitude:</label>
+                    <input type="number" name="lon" id="lon" step="0.000001" value="-47.0" placeholder="e.g., -118.25" />
+                </div>
+
+                <div class="form-group">
+                    <label for="date"><i class="far fa-calendar"></i> Incident Date:</label>
+                    <input type="date" name="date" id="date" required />
+                </div>
+
+                <div class="form-group">
+                    <label for="time"><i class="far fa-clock"></i> Incident Time:</label>
+                    <input type="time" name="time" id="time" required />
+                </div>
+
+                <div class="form-group">
+                    <label for="prediction_time"><i class="fas fa-desktop"></i> Current Time:</label>
+                    <input type="text" id="prediction_time" name="prediction_time" readonly />
+                    <input type="hidden" id="current_timestamp" name="current_timestamp" />
+                </div>
+
+                <div class="form-group">
+                    <label for="object_type"><i class="fas fa-life-ring"></i> Object Type:</label>
+                    <select name="object_type" id="object_type">
+                        <option value="Person_Adult_LifeJacket">Person with Life Jacket</option>
+                        <option value="Person_Adult_NoLifeJacket">Person without Life Jacket</option>
+                        <option value="Person_Adolescent_LifeJacket">Adolescent with Life Jacket</option>
+                        <option value="Person_Child_LifeJacket">Child with Life Jacket</option>
+                        <option value="Catamaran">Catamaran</option>
+                        <option value="Hobby_Cat">Hobby Cat</option>
+                        <option value="Fishing_Trawler">Fishing Trawler</option>
+                        <option value="RHIB">RHIB</option>
+                        <option value="SUP_Board">SUP Board</option>
+                        <option value="Windsurfer">Windsurfer</option>
+                        <option value="Kayak">Kayak</option>
+                    </select>
+                </div>
+
+                <button type="submit" class="btn">
+                    <i class="fas fa-calculator"></i> Calculate Drift
+                </button>
+            </div>
+        </form>
+
+        <div class="info-section">
+            <h3><i class="fas fa-info-circle"></i> About</h3>
+            <p>KairoDrift uses ocean currents and wind data to predict the most likely position of drifting objects.</p>
+            <p>Click on the map to set the starting coordinates or manually enter the latitude and longitude.</p>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <h1>KairoDrift Prediction</h1>
+        <p>Enter the starting coordinates and other parameters to calculate the drift path of an object at sea.</p>
+
+        <div id="map"></div>
+    </main>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-velocity/dist/leaflet-velocity.min.js"></script>
+<script src="/static/map.js"></script>
+<script src="/static/enhancements.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Set current date and time as defaults for incident
+        const now = new Date();
+        document.getElementById('date').valueAsDate = now;
+
+        // Format time as HH:MM
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        document.getElementById('time').value = `${hours}:${minutes}`;
+
+        // Update current time display
+        function updateCurrentTime() {
+            const now = new Date();
+            // Format for display
+            const options = {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true
+            };
+            document.getElementById('prediction_time').value = now.toLocaleString('en-US', options);
+
+            // Store timestamp for backend - use ISO format but remove the 'Z'
+            let isoTime = now.toISOString();
+            isoTime = isoTime.replace('Z', ''); // Remove the Z to make it timezone-naive
+            document.getElementById('current_timestamp').value = isoTime;
+        }
+
+        // Update current time immediately and then every second
+        updateCurrentTime();
+        setInterval(updateCurrentTime, 1000);
+
+        // Initialize map
+        const map = L.map('map').setView([34.0, -47.0], 5);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // Add a marker at the default location
+        let marker = L.marker([34.0, -47.0]).addTo(map);
+
+        // Update marker and form values when the map is clicked
+        map.on('click', function(e) {
+            // Update the marker position
+            marker.setLatLng(e.latlng);
+
+            // Update the form inputs
+            document.getElementById('lat').value = e.latlng.lat.toFixed(6);
+            document.getElementById('lon').value = e.latlng.lng.toFixed(6);
+        });
+
+        // Update map when form inputs change
+        const latInput = document.getElementById('lat');
+        const lonInput = document.getElementById('lon');
+
+        function updateMap() {
+            const lat = parseFloat(latInput.value);
+            const lon = parseFloat(lonInput.value);
+            if (!isNaN(lat) && !isNaN(lon)) {
+                marker.setLatLng([lat, lon]);
+                map.setView([lat, lon], map.getZoom());
+            }
+        }
+
+        latInput.addEventListener('input', updateMap);
+        lonInput.addEventListener('input', updateMap);
+
+        // Ensure form submission includes the current time
+        document.querySelector('form').addEventListener('submit', function() {
+            updateCurrentTime(); // Update one last time right before submission
+        });
+    });
+</script>
+</body>
+</html>

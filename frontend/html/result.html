@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drift Result - KairoDrift</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-velocity/dist/leaflet-velocity.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Debugging help -->
+    <script>
+        console.log("Result page loaded");
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log("DOM loaded");
+            // List all CSS files loaded
+            const styleSheets = Array.from(document.styleSheets);
+            console.log("Loaded stylesheets:", styleSheets.map(s => s.href));
+        });
+    </script>
+</head>
+<body>
+{% if error %}
+<div class="error-container">
+    <h1>Error Occurred</h1>
+    <p>{{ error_message }}</p>
+    <pre>{{ error_details }}</pre>
+    <a href="/" class="btn">Go Back</a>
+</div>
+{% else %}
+<div class="container">
+    <aside class="sidebar">
+        <h2>Drift Results</h2>
+
+        <div class="result-item animate-in" style="animation-delay: 0.1s">
+            <p>
+                <strong><i class="fas fa-map-marker-alt"></i> Original Location</strong>
+                <span class="result-value">{{ orig_lat }}, {{ orig_lon }}</span>
+            </p>
+        </div>
+
+        <div class="result-item animate-in" style="animation-delay: 0.2s">
+            <p>
+                <strong><i class="fas fa-location-arrow"></i> Predicted Location</strong>
+                <span class="result-value">{{ new_lat }}, {{ new_lon }}</span>
+            </p>
+        </div>
+
+        <div class="result-item animate-in" style="animation-delay: 0.3s">
+            <p>
+                <strong><i class="far fa-clock"></i> Elapsed Time</strong>
+                <span class="result-value">{{ elapsed_hours }} hours</span>
+            </p>
+        </div>
+
+        <div class="result-item animate-in" style="animation-delay: 0.4s">
+            <p>
+                <strong><i class="fas fa-route"></i> Drift Distance</strong>
+                <span class="result-value">{{ drift_km }} km</span>
+            </p>
+        </div>
+
+        <div class="result-item animate-in" style="animation-delay: 0.5s">
+            <p>
+                <strong><i class="fas fa-life-ring"></i> Object</strong>
+                <span class="result-value">{{ object_type }}</span>
+            </p>
+        </div>
+
+        {% if object_type == 'Person' %}
+        <div class="result-item animate-in" style="animation-delay: 0.6s">
+            <p>
+                <strong><i class="fas fa-vest-patches"></i> Life Jacket</strong>
+                <span class="result-value">{{ life_jacket }}</span>
+            </p>
+        </div>
+
+        <div class="result-item animate-in" style="animation-delay: 0.7s">
+            <p>
+                <strong><i class="fas fa-user"></i> Age Group</strong>
+                <span class="result-value">{{ age_group }}</span>
+            </p>
+        </div>
+        {% endif %}
+
+        <div class="search-pattern animate-in" style="animation-delay: 0.8s">
+            <strong><span class="search-pattern-icon"></span> Recommended Search Pattern</strong>
+            <span class="result-value">{{ search_pattern }}</span>
+            <p class="note"><em>{{ pattern_reason }}</em></p>
+        </div>
+
+        <div style="display: flex; justify-content: center; width: 100%; margin-top: 16px;">
+            <a class="btn" href="/"><i class="fas fa-redo"></i> New Prediction</a>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <h1>Predicted Drift Path</h1>
+        <p>Based on calculated drift from incident location to estimated current position.</p>
+        <div id="map"></div>
+    </main>
+</div>
+{% endif %}
+
+<script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-velocity/dist/leaflet-velocity.min.js"></script>
+<script src="/static/map.js"></script>
+<script>
+    try {
+        const intervalPositions = {{ interval_positions|safe }};
+        // Check if the map.js file loaded correctly
+        if (typeof initMap === 'function') {
+            console.log("Map initialization function exists");
+            initMap({{ orig_lat }}, {{ orig_lon }}, {{ new_lat }}, {{ new_lon }}, intervalPositions);
+        } else {
+            console.error("Map initialization function is missing - check if map.js loaded correctly");
+        }
+    } catch (e) {
+        console.error("Map failed to initialize:", e);
+    }
+</script>
+</body>
+</html>
