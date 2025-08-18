@@ -1,0 +1,11 @@
+flask
+requests
+fastapi
+uvicorn
+jinja2
+python-dotenv
+python-multipart
+xarray
+netCDF4
+copernicusmarine
+scikit-learn

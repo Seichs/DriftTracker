@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Drift Predictor - KairoDrift</title>
+    <title>Drift Predictor - DriftTracker</title>
     <link rel="stylesheet" href="/static/style.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet-velocity/dist/leaflet-velocity.min.css" />
@@ -21,12 +21,12 @@
 
                 <div class="form-group">
                     <label for="lat"><i class="fas fa-map-marker-alt"></i> Latitude:</label>
-                    <input type="number" name="lat" id="lat" step="0.000001" value="34.0" placeholder="e.g., 34.05" />
+                                         <input type="number" name="lat" id="lat" step="0.000001" value="52.5" placeholder="e.g., 52.5" />
                 </div>
 
                 <div class="form-group">
                     <label for="lon"><i class="fas fa-map-pin"></i> Longitude:</label>
-                    <input type="number" name="lon" id="lon" step="0.000001" value="-47.0" placeholder="e.g., -118.25" />
+                    <input type="number" name="lon" id="lon" step="0.000001" value="4.2" placeholder="e.g., 4.2" />
                 </div>
 
                 <div class="form-group">
@@ -70,13 +70,13 @@
 
         <div class="info-section">
             <h3><i class="fas fa-info-circle"></i> About</h3>
-            <p>KairoDrift uses ocean currents and wind data to predict the most likely position of drifting objects.</p>
+            <p>DriftTracker uses ocean currents and wind data to predict the most likely position of drifting objects.</p>
             <p>Click on the map to set the starting coordinates or manually enter the latitude and longitude.</p>
         </div>
     </aside>
 
     <main class="main-content">
-        <h1>KairoDrift Prediction</h1>
+        <h1>DriftTracker Prediction</h1>
         <p>Enter the starting coordinates and other parameters to calculate the drift path of an object at sea.</p>
 
         <div id="map"></div>
@@ -123,15 +123,15 @@
         updateCurrentTime();
         setInterval(updateCurrentTime, 1000);
 
-        // Initialize map
-        const map = L.map('map').setView([34.0, -47.0], 5);
+                 // Initialize map
+         const map = L.map('map').setView([52.5, 4.2], 7);
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         }).addTo(map);
 
-        // Add a marker at the default location
-        let marker = L.marker([34.0, -47.0]).addTo(map);
+                 // Add a marker at the default location
+         let marker = L.marker([52.5, 4.2]).addTo(map);
 
         // Update marker and form values when the map is clicked
         map.on('click', function(e) {

@@ -1,4 +1,4 @@
-# /ml/train_model.py - Simons Town & Cape Point Drift Model Trainer
+# /ml/train_model.py - Dutch Coastal Waters Drift Model Trainer
 
 import pandas as pd
 import numpy as np
@@ -7,8 +7,8 @@ from sklearn.preprocessing import LabelEncoder
 import joblib
 import os
 
-# === Simulate dummy drift logs for Simon's Town & Cape Point ===
-def generate_simons_town_data(samples=500):
+# === Simulate dummy drift logs for Dutch Coastal Waters ===
+def generate_dutch_coastal_data(samples=500):
     np.random.seed(42)
     person_profiles = [
         ("Person_Adult_LifeJacket", 1.0),
@@ -34,8 +34,8 @@ def generate_simons_town_data(samples=500):
         else:
             obj, drag = boat_profiles[np.random.randint(len(boat_profiles))]
 
-        lat = np.random.uniform(-34.35, -34.25)
-        lon = np.random.uniform(18.45, 18.55)
+        lat = np.random.uniform(52.3, 52.7)
+        lon = np.random.uniform(3.8, 4.5)
         hours = np.random.uniform(0.5, 6.0)
         uo = np.random.uniform(0.2, 1.2)
         vo = np.random.uniform(0.2, 1.2)
@@ -59,16 +59,19 @@ def generate_simons_town_data(samples=500):
 
 # === Train models ===
 def train_models():
-    df = generate_simons_town_data()
+    df = generate_dutch_coastal_data()
 
+    # Get the directory of this script
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    
     # Encode object and search pattern
     le_obj = LabelEncoder()
     df["object_code"] = le_obj.fit_transform(df["object_type"])
-    joblib.dump(le_obj, "ml/object_encoder.pkl")
+    joblib.dump(le_obj, os.path.join(script_dir, "object_encoder.pkl"))
 
     le_pat = LabelEncoder()
     df["pattern_code"] = le_pat.fit_transform(df["search_pattern"])
-    joblib.dump(le_pat, "ml/pattern_encoder.pkl")
+    joblib.dump(le_pat, os.path.join(script_dir, "pattern_encoder.pkl"))
 
     features = ["object_code", "drag", "hours_since", "uo", "vo"]
 
@@ -77,16 +80,18 @@ def train_models():
     y_drift = df["drift_distance_km"]
     drift_model = RandomForestRegressor(n_estimators=100, random_state=42)
     drift_model.fit(X, y_drift)
-    joblib.dump(drift_model, "ml/model_drift.pkl")
+    joblib.dump(drift_model, os.path.join(script_dir, "model_drift.pkl"))
 
     # Classifier for pattern
     y_pattern = df["pattern_code"]
     pattern_model = RandomForestClassifier(n_estimators=100, random_state=42)
     pattern_model.fit(X, y_pattern)
-    joblib.dump(pattern_model, "ml/model_pattern.pkl")
+    joblib.dump(pattern_model, os.path.join(script_dir, "model_pattern.pkl"))
 
-    print("✅ Models trained on Simon's Town & Cape Point data and saved in /ml/")
+    print("✅ Models trained on Dutch coastal waters data and saved in /ml/")
 
 if __name__ == "__main__":
-    os.makedirs("ml", exist_ok=True)
+    # Ensure the ml directory exists (this file is already in the ml directory)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    os.makedirs(script_dir, exist_ok=True)
     train_models()

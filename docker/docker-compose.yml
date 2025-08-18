@@ -1,0 +1,77 @@
+version: '3.8'
+
+# DriftTracker - Ocean Drift Prediction System
+# Docker Compose Configuration
+# SharpByte Software - https://sharpbytesoftware.com/
+
+services:
+  # Production service
+  drifttracker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../data:/app/data
+      - ../logs:/app/logs
+    environment:
+      - PYTHONPATH=/app/backend
+      - PYTHONUNBUFFERED=1
+      - ENVIRONMENT=production
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - drifttracker-network
+
+  # Development service
+  drifttracker-dev:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dev
+    ports:
+      - "8001:8000"
+    volumes:
+      - ../data:/app/data
+      - ../logs:/app/logs
+      - ../backend:/app/backend
+      - ../frontend:/app/frontend
+      - ../tests:/app/tests
+    environment:
+      - PYTHONPATH=/app/backend
+      - PYTHONUNBUFFERED=1
+      - ENVIRONMENT=development
+    restart: unless-stopped
+    profiles:
+      - dev
+    networks:
+      - drifttracker-network
+
+  # Testing service
+  drifttracker-test:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dev
+    volumes:
+      - ../data:/app/data
+      - ../logs:/app/logs
+      - ../backend:/app/backend
+      - ../tests:/app/tests
+    environment:
+      - PYTHONPATH=/app/backend
+      - PYTHONUNBUFFERED=1
+      - ENVIRONMENT=testing
+    command: ["python", "-m", "pytest", "tests/", "-v", "--cov=backend"]
+    profiles:
+      - test
+    networks:
+      - drifttracker-network
+
+networks:
+  drifttracker-network:
+    driver: bridge 

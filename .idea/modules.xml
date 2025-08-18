@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/KairoDrift.iml" filepath="$PROJECT_DIR$/.idea/KairoDrift.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/DriftTracker.iml" filepath="$PROJECT_DIR$/.idea/DriftTracker.iml" />
     </modules>
   </component>
 </project>

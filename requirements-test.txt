@@ -1,0 +1,59 @@
+# Testing dependencies for DriftTracker
+# Core testing framework
+pytest>=7.0.0
+pytest-cov>=4.0.0
+pytest-html>=3.1.0
+pytest-xdist>=3.0.0
+pytest-timeout>=2.1.0
+pytest-mock>=3.10.0
+
+# Code quality and coverage
+coverage>=7.0.0
+pylint>=2.17.0
+black>=23.0.0
+flake8>=6.0.0
+mypy>=1.0.0
+
+# Performance testing
+pytest-benchmark>=4.0.0
+
+# API testing
+httpx>=0.24.0
+requests-mock>=1.10.0
+
+# Data science testing
+pandas>=1.5.0
+numpy>=1.24.0
+xarray>=2023.1.0
+
+# Mocking and test utilities
+factory-boy>=3.2.0
+faker>=18.0.0
+
+# Environment and configuration testing
+python-dotenv>=1.0.0
+
+# Documentation testing
+pytest-docstyle>=2.0.0
+
+# Security testing
+bandit>=1.7.0
+
+# Integration testing
+testcontainers>=3.7.0
+
+# Web testing (for frontend tests)
+selenium>=4.0.0
+playwright>=1.30.0
+
+# Database testing (if needed later)
+# pytest-postgresql>=4.1.0
+
+# Async testing
+pytest-asyncio>=0.21.0
+
+# Property-based testing
+hypothesis>=6.70.0
+
+# Mutation testing
+mutmut>=2.2.0 

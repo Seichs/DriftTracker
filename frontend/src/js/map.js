@@ -1,7 +1,7 @@
 // static/map.js
 // Initialize map and display ocean drift prediction and animated current overlay with error handling
 
-function initMap(origLat = -34.2, origLon = 18.4, driftLat = null, driftLon = null, intervalPositions = null) {
+function initMap(origLat = 52.5, origLon = 4.2, driftLat = null, driftLon = null, intervalPositions = null) {
     try {
         // Create the Leaflet map centered on original coordinates
         const map = L.map('map').setView([origLat, origLon], 7);

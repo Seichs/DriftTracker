@@ -1,0 +1,3 @@
+# This file ensures the data directory is tracked by Git
+# Ocean current data files (.nc) and other data will be stored here
+# These files are typically large and should be added to .gitignore

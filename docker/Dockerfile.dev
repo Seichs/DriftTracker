@@ -1,0 +1,47 @@
+# DriftTracker - Ocean Drift Prediction System
+# Development Dockerfile
+# SharpByte Software - https://sharpbytesoftware.com/
+
+FROM python:3.9-slim as base
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    libnetcdf-dev \
+    libhdf5-dev \
+    curl \
+    git \
+    vim \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements first for better caching
+COPY requirements.txt requirements-test.txt ./
+
+# Install Python dependencies (including development tools)
+RUN pip install --no-cache-dir -r requirements.txt -r requirements-test.txt
+
+# Copy application code
+COPY backend/ ./backend/
+COPY frontend/ ./frontend/
+COPY tests/ ./tests/
+COPY pytest.ini ./
+COPY Makefile ./
+
+# Create necessary directories
+RUN mkdir -p /app/data /app/logs /app/cache
+
+# Expose port
+EXPOSE 8000
+
+# Run the application in development mode
+CMD ["uvicorn", "backend.cli:app", "--host", "0.0.0.0", "--port", "8000", "--reload"] 

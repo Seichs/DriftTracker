@@ -24,8 +24,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import uvicorn
 from fastapi.concurrency import run_in_threadpool
-from data_service import get_ocean_data_file
+from drifttracker.data_service import get_ocean_data_file
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
+import copernicusmarine as cm
 from fastapi import status
 from starlette.middleware.sessions import SessionMiddleware
 import secrets
@@ -66,7 +67,9 @@ if os.path.exists(css_file):
 else:
     print(f"WARNING: CSS file not found at: {css_file}")
 
-app.mount("/static", StaticFiles(directory=static_dir), name="static")
+# Only mount static directory if it exists
+if os.path.exists(static_dir):
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 # Object profiles with drag factors
 OBJECT_PROFILES = {
@@ -272,7 +275,6 @@ def download_ocean_data(lat, lon, start_time, end_time,
     print(f"Using Copernicus credentials for user: {username}")
 
     # ── Copernicus-Marine ≥ 2.0 API ─────────────────────────────
-    import copernicusmarine as cm
     print(f"Copernicus-Marine toolbox version {cm.__version__}")
 
     # Create (or reuse) ~/.copernicusmarine-credentials
@@ -370,7 +372,7 @@ def get_search_pattern(object_type, hours, distance_km):
     elif "Life" in object_type and hours < 24:
         return "Parallel Track", "Person with life jacket - expanded search area."
     else:
-        return "Creeping Line", "Extended search for significant drift."
+        return "Parallel Sweep", "Large area, long time, or high uncertainty."
 
 
 def fallback_drift_calculation(lat, lon, hours, object_type):
@@ -409,15 +411,15 @@ def calculate_drift(lat, lon, hours, object_type, start_time, end_time, currents
 
         # Create a list to store positions at regular intervals
         interval_positions = []
-        interval_positions.append({"lat": current_lat, "lon": current_lon, "hours": 0})
+        interval_positions.append({"lat": current_lat, "lon": current_lon, "hours": 0, "timestamp": start_time.isoformat()})
 
         # Get object characteristics (e.g., windage) based on type
         object_properties = get_object_properties(object_type)
 
         # Create a time array from start_time to end_time with appropriate intervals
-        # For example, one position every 15 minutes
         time_interval_minutes = 15
-        time_steps = int(hours * 60 / time_interval_minutes)
+        total_minutes = hours * 60
+        time_steps = int(total_minutes / time_interval_minutes)
 
         # Loop through each time step
         for step in range(1, time_steps + 1):
@@ -442,30 +444,33 @@ def calculate_drift(lat, lon, hours, object_type, start_time, end_time, currents
 
             # Calculate new position based on currents
             # Simple movement calculation - could be replaced with more sophisticated models
-            hours_elapsed = time_interval_minutes / 60
-            lon_change = u_effective * hours_elapsed * LON_KM_PER_DEGREE_AT_EQUATOR * math.cos(
-                math.radians(current_lat))
-            lat_change = v_effective * hours_elapsed * LAT_KM_PER_DEGREE
+            dt_seconds = time_interval_minutes * 60
+            dx_meters = u_effective * dt_seconds
+            dy_meters = v_effective * dt_seconds
+
+            lat_change_deg = dy_meters / (LAT_KM_PER_DEGREE * 1000)
+            lon_change_deg = dx_meters / (LON_KM_PER_DEGREE_AT_EQUATOR * 1000 * math.cos(math.radians(current_lat)))
 
             # Update position
-            current_lon += lon_change
-            current_lat += lat_change
+            current_lon += lon_change_deg
+            current_lat += lat_change_deg
 
             # Store position at hourly intervals for visualization
-            elapsed_hours = step * time_interval_minutes / 60
-            if abs(elapsed_hours - round(elapsed_hours)) < 0.01:  # If close to a whole hour
-                interval_positions.append({
-                    "lat": current_lat,
-                    "lon": current_lon,
-                    "hours": round(elapsed_hours)
-                })
+            elapsed_hours_total = step * time_interval_minutes / 60
+            interval_positions.append({
+                "lat": round(current_lat, 6),
+                "lon": round(current_lon, 6),
+                "hours": round(elapsed_hours_total, 2),
+                "timestamp": current_time.isoformat()
+            })
 
         # If no hourly positions were recorded, at least add the final position
         if len(interval_positions) == 1:
             interval_positions.append({
                 "lat": current_lat,
                 "lon": current_lon,
-                "hours": hours
+                "hours": hours,
+                "timestamp": end_time.isoformat()
             })
 
         return current_lat, current_lon, interval_positions
@@ -484,70 +489,90 @@ def calculate_drift_path(nc_file: str, lat: float, lon: float,
 
         # Set initial position
         current_lat, current_lon = lat, lon
-        path = [{"lat": current_lat, "lon": current_lon}]
+        path = [{"lat": current_lat, "lon": current_lon, "hours_elapsed": 0.0}]
 
-        # Calculate time step size
-        if 'time' in ds.dims:
+        # Calculate time step size from NetCDF
+        step_hours = 1.0
+        if 'time' in ds.dims and len(ds.time.values) > 0:
             time_values = ds.time.values
-            time_count = len(time_values)
+            if len(time_values) >= 2:
+                try:
+                    time_delta_pd = pd.Timestamp(time_values[1]) - pd.Timestamp(time_values[0])
+                    step_hours = time_delta_pd.total_seconds() / 3600.0
+                except TypeError:
+                    time_delta_np = time_values[1] - time_values[0]
+                    step_hours = time_delta_np.astype('timedelta64[s]').item().total_seconds() / 3600.0
 
-            if time_count >= 2:
-                time_delta = time_values[1] - time_values[0]
-                step_hours = time_delta.astype('timedelta64[h]').item().total_seconds() / 3600.0
-            else:
+            if step_hours <= 0:
                 step_hours = 1.0
-        else:
-            time_count = 1
-            step_hours = 1.0
+        
+        num_steps = int(hours / step_hours)
+        if num_steps == 0 and hours > 0:
+            num_steps = 1
+            step_hours = hours
 
-        # Calculate steps
-        max_steps = min(int(hours / step_hours), time_count)
-
-        for i in range(max_steps):
+        for i in range(num_steps):
+            # Determine time index for NetCDF data
+            time_index_in_ds = min(i, len(ds.time) - 1) if 'time' in ds.dims and len(ds.time) > 0 else 0
+            
             # Get current velocities at position
             try:
-                # Extract velocities
-                uo = ds["uo"].sel(time=ds.time.values[min(i, len(ds.time) - 1)],
-                                  latitude=current_lat,
-                                  longitude=current_lon,
-                                  method="nearest").values.item()
+                selected_time = ds.time.values[time_index_in_ds] if 'time' in ds.dims and len(ds.time) > 0 else None
 
-                vo = ds["vo"].sel(time=ds.time.values[min(i, len(ds.time) - 1)],
-                                  latitude=current_lat,
-                                  longitude=current_lon,
-                                  method="nearest").values.item()
+                if selected_time is not None:
+                    uo = ds["uo"].sel(time=selected_time,
+                                      latitude=current_lat,
+                                      longitude=current_lon,
+                                      method="nearest").values.item()
 
-                # Calculate movement
-                dx = uo * 3600 * step_hours * drag_factor
-                dy = vo * 3600 * step_hours * drag_factor
+                    vo = ds["vo"].sel(time=selected_time,
+                                      latitude=current_lat,
+                                      longitude=current_lon,
+                                      method="nearest").values.item()
+                else:
+                    uo = ds["uo"].isel(latitude=0, longitude=0).interp(latitude=current_lat, longitude=current_lon, method="nearest").values.item()
+                    vo = ds["vo"].isel(latitude=0, longitude=0).interp(latitude=current_lat, longitude=current_lon, method="nearest").values.item()
+
+                # Calculate movement in meters for the step_hours
+                dx_meters = uo * step_hours * 3600 * drag_factor
+                dy_meters = vo * step_hours * 3600 * drag_factor
 
                 # Convert to degrees
-                delta_lat = dy / 111000.0
-                delta_lon = dx / (111000.0 * math.cos(math.radians(current_lat)))
+                delta_lat = dy_meters / 110574.0
+                delta_lon = dx_meters / (111320.0 * math.cos(math.radians(current_lat)))
 
                 # Update position
                 current_lat += delta_lat
                 current_lon += delta_lon
-
+                
+                hours_elapsed = (i + 1) * step_hours
                 # Add to path
-                path.append({"lat": round(current_lat, 6), "lon": round(current_lon, 6)})
+                path.append({"lat": round(current_lat, 6), "lon": round(current_lon, 6), "hours_elapsed": round(hours_elapsed,2)})
 
             except Exception as e:
-                # If error, continue with a small default drift
-                current_lat += 0.001 * drag_factor
-                current_lon += 0.0015 * drag_factor
-                path.append({"lat": round(current_lat, 6), "lon": round(current_lon, 6)})
+                print(f"Error during step {i} in calculate_drift_path: {e}")
+                # If error, continue with a small default drift for this step
+                current_lat += 0.001 * drag_factor * step_hours
+                current_lon += 0.0015 * drag_factor * step_hours
+                hours_elapsed = (i + 1) * step_hours
+                path.append({"lat": round(current_lat, 6), "lon": round(current_lon, 6), "hours_elapsed": round(hours_elapsed,2)})
 
         ds.close()
         return path
 
     except Exception as e:
+        print(f"Error in calculate_drift_path: {e}")
         # Fallback path calculation
-        path = [{"lat": lat, "lon": lon}]
-        for i in range(int(hours)):
-            lat += 0.001 * drag_factor
-            lon += 0.0015 * drag_factor
-            path.append({"lat": round(lat, 6), "lon": round(lon, 6)})
+        path = [{"lat": lat, "lon": lon, "hours_elapsed": 0.0}]
+        step_hours_fallback = 1.0
+        num_steps_fallback = int(hours / step_hours_fallback)
+        if num_steps_fallback == 0 and hours > 0: num_steps_fallback = 1
+
+        for i in range(num_steps_fallback):
+            lat += 0.001 * drag_factor * step_hours_fallback
+            lon += 0.0015 * drag_factor * step_hours_fallback
+            hours_elapsed = (i + 1) * step_hours_fallback
+            path.append({"lat": round(lat, 6), "lon": round(lon, 6), "hours_elapsed": round(hours_elapsed,2)})
         return path
 
 
@@ -558,7 +583,7 @@ def recommend_search_pattern(hours: float, drift_km: float) -> tuple:
     elif hours < 3 and drift_km < 8:
         return "Expanding Square", "Covers moderate uncertainty zones."
     else:
-        return "Parallel Sweep", "Large coverage when drift is wide."
+        return "Parallel Sweep", "Large coverage when drift is wide or time is long."
 
 
 def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -571,15 +596,9 @@ def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return R * c
 
 
-# Define API status check function
-def check_api_status():
-    """Check if Copernicus API is available"""
-    return {"status": "available"}
-
-
 # Make login page the default landing page at the root URL
 @app.get("/", response_class=HTMLResponse)
-async def root(request: Request, error: str = None):
+async def root(request: Request, error: Optional[str] = None):
     """Display the login page at the root URL"""
     # Add more debug to help troubleshoot
     print("Rendering login page")
@@ -611,18 +630,18 @@ async def process_login(request: Request):
                 "error": "Username and password are required",
                 "username": username,
                 "favicon_url": "/static/favicon.png"
-            }
+            },
+            status_code=status.HTTP_400_BAD_REQUEST
         )
 
     try:
         # Try authenticating with Copernicus API
-        import copernicusmarine as cm
         print(f"Attempting login with username: {username} and password: {'*' * len(password)}")
 
         cm.login(username=username, password=password, force_overwrite=True)
 
         # If successful, redirect to the main application page
-        return RedirectResponse(url=f"/app?username={username}", status_code=303)
+        return RedirectResponse(url=f"/app?username={username}", status_code=status.HTTP_303_SEE_OTHER)
 
     except Exception as e:
         # Authentication failed
@@ -637,17 +656,18 @@ async def process_login(request: Request):
                 "error": error_msg,
                 "username": username,
                 "favicon_url": "/static/favicon.png"
-            }
+            },
+            status_code=status.HTTP_401_UNAUTHORIZED
         )
 
 
 # Make the main application page at /app
 @app.get("/app", response_class=HTMLResponse)
-async def app_home(request: Request, username: str = None):
+async def app_home(request: Request, username: Optional[str] = None):
     """Render the main application page after login"""
     # If no username, redirect to login
     if not username:
-        return RedirectResponse(url="/", status_code=303)
+        return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
 
     # Display the main application page
     current_timestamp = datetime.now(timezone.utc).isoformat()
@@ -656,7 +676,8 @@ async def app_home(request: Request, username: str = None):
         {
             "request": request,
             "current_timestamp": current_timestamp,
-            "username": username  # Pass this along for display
+            "username": username,  # Pass this along for display
+            "object_profiles": OBJECT_PROFILES
         }
     )
 
@@ -666,40 +687,116 @@ async def app_home(request: Request, username: str = None):
 async def predict(request: Request):
     """Calculate drift prediction and render result.html"""
     try:
-        # Parse form data
         form_data = await request.form()
+        # Basic security: ensure user is "logged in" (e.g. by checking if username is in form_data or session)
+        username = form_data.get("username")
+        if not username:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
-        # Continue with your existing prediction code...
+        lat = float(form_data.get("lat"))
+        lon = float(form_data.get("lon"))
+        hours = int(form_data.get("hours"))
+        object_type = form_data.get("object_type")
+        
+        # Incident date and time
+        incident_date_str = form_data.get("date")
+        incident_time_str = form_data.get("time")
 
+        if not all([incident_date_str, incident_time_str]):
+            incident_dt = datetime.now(timezone.utc) # Default to now if not provided
+        else:
+            try:
+                incident_dt = datetime.strptime(f"{incident_date_str} {incident_time_str}", "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
+            except ValueError:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid date/time format.")
+
+        # Ensure incident time is not in the future
+        if incident_dt > datetime.now(timezone.utc):
+             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Incident time cannot be in the future.")
+
+        # Define time range for data download (e.g., 24 hours before to 'hours' after incident)
+        start_data_fetch_dt = incident_dt - timedelta(hours=1)
+        end_data_fetch_dt = incident_dt + timedelta(hours=hours) + timedelta(hours=1)
+
+        # Get drag factor
+        drag_factor = OBJECT_PROFILES.get(object_type, {}).get("drag_factor", 1.0)
+
+        # Download data (blocking, run in threadpool)
+        nc_file_path = await run_in_threadpool(
+            download_ocean_data,
+            lat, lon, 
+            start_data_fetch_dt,
+            end_data_fetch_dt,
+            COPERNICUS_USERNAME, 
+            COPERNICUS_PASSWORD
+        )
+
+        if not nc_file_path or not os.path.exists(nc_file_path):
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve ocean data.")
+
+        # Calculate drift path
+        drift_path_points = await run_in_threadpool(
+            calculate_drift_path,
+            nc_file_path,
+            lat,
+            lon,
+            float(hours),
+            drag_factor
+        )
+
+        if not drift_path_points:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Drift calculation failed.")
+
+        final_pos = drift_path_points[-1]
+        new_lat, new_lon = final_pos["lat"], final_pos["lon"]
+
+        # Calculate total distance drifted
+        total_distance_km = 0
+        if len(drift_path_points) > 1:
+            total_distance_km = haversine(lat, lon, new_lat, new_lon)
+        
+        # Recommend search pattern
+        pattern_name, pattern_desc = recommend_search_pattern(float(hours), total_distance_km)
+        
+        return templates.TemplateResponse("result.html", {
+            "request": request,
+            "orig_lat": lat,
+            "orig_lon": lon,
+            "new_lat": new_lat,
+            "new_lon": new_lon,
+            "drift_hours": hours,
+            "object_type": object_type,
+            "total_distance_km": round(total_distance_km, 2),
+            "search_pattern_name": pattern_name,
+            "search_pattern_description": pattern_desc,
+            "drift_path": drift_path_points,
+            "username": username
+        })
+
+    except HTTPException:
+        raise
     except Exception as e:
         # Handle errors
         print(f"Prediction error: {str(e)}")
-        # You can redirect to login if needed
-        # return RedirectResponse(url="/", status_code=303)
+        return templates.TemplateResponse("result.html", {
+            "request": request,
+            "error": True,
+            "error_message": f"An error occurred during prediction: {str(e)}",
+        })
 
 
 def calculate_simple_distance(lat1, lon1, lat2, lon2):
     """Simple function to calculate distance between coordinates in km"""
-    # Earth radius in kilometers
     R = 6371.0
-
-    # Convert coordinates to radians
     lat1_rad = math.radians(lat1)
     lon1_rad = math.radians(lon1)
     lat2_rad = math.radians(lat2)
     lon2_rad = math.radians(lon2)
-
-    # Calculate differences
     dlat = lat2_rad - lat1_rad
     dlon = lon2_rad - lon1_rad
-
-    # Haversine formula
     a = math.sin(dlat / 2) ** 2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(dlon / 2) ** 2
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-
-    # Distance in kilometers
     distance = R * c
-
     return distance
 
 
@@ -714,7 +811,8 @@ async def debug_data(lat: float, lon: float):
         # Fix 2 & 3: Use run_in_threadpool instead of direct await
         data_file = await run_in_threadpool(
             download_ocean_data,
-            lat, lon, start_time, end_time
+            lat, lon, start_time, end_time,
+            COPERNICUS_USERNAME, COPERNICUS_PASSWORD
         )
 
         # Read the file to verify contents
@@ -724,9 +822,9 @@ async def debug_data(lat: float, lon: float):
             dims = {dim: len(ds[dim]) for dim in ds.dims}
 
             # Get some sample data
-            time_range = [str(ds.time.values[0]), str(ds.time.values[-1])]
-            lat_range = [float(ds.latitude.values[0]), float(ds.latitude.values[-1])]
-            lon_range = [float(ds.longitude.values[0]), float(ds.longitude.values[-1])]
+            time_range_ds = [str(ds.time.values[0]), str(ds.time.values[-1])] if 'time' in ds else "N/A"
+            lat_range_ds = [float(ds.latitude.values[0]), float(ds.latitude.values[-1])] if 'latitude' in ds else "N/A"
+            lon_range_ds = [float(ds.longitude.values[0]), float(ds.longitude.values[-1])] if 'longitude' in ds else "N/A"
 
             # Get some current samples
             if 'uo' in ds and 'vo' in ds:
@@ -740,156 +838,19 @@ async def debug_data(lat: float, lon: float):
 
             return {
                 "status": "success",
-                "file_info": {
-                    "path": data_file,
-                    "exists": os.path.exists(data_file),
-                    "size_bytes": os.path.getsize(data_file) if os.path.exists(data_file) else 0
-                },
-                "data_summary": {
-                    "variables": variables,
-                    "dimensions": dims,
-                    "time_range": time_range,
-                    "latitude_range": lat_range,
-                    "longitude_range": lon_range,
-                    "current_samples": current_samples
-                }
+                "data_file": data_file,
+                "variables": variables,
+                "dimensions": dims,
+                "time_range": time_range_ds,
+                "latitude_range": lat_range_ds,
+                "longitude_range": lon_range_ds,
+                "current_samples": current_samples
             }
         else:
-            return {
-                "status": "error",
-                "message": "Data file not found",
-                "file_info": {
-                    "path": data_file,
-                    "exists": False
-                }
-            }
-    except Exception as e:
-        return {
-            "status": "error",
-            "message": str(e),
-            "traceback": traceback.format_exc()
-        }
-
-
-@app.get("/test-download")
-async def test_download():
-    """Test endpoint to verify Copernicus download works"""
-    try:
-        # Use test coordinates
-        lat, lon = 43.5, 0.0
-        end_time = datetime.utcnow()
-        start_time = end_time - timedelta(hours=7)
-
-        # Get credentials
-        username = os.getenv("COPERNICUS_USERNAME", "postema45@gmail.com")
-        password = os.getenv("COPERNICUS_PASSWORD", "IkHebAids1")
-
-        # Try the download
-        data_file = await download_ocean_data(lat, lon, start_time, end_time, username, password)
-
-        # Check file size
-        file_size = os.path.getsize(data_file) if os.path.exists(data_file) else 0
-
-        return {
-            "status": "success",
-            "message": "Download test completed",
-            "file_path": data_file,
-            "file_exists": os.path.exists(data_file),
-            "file_size_bytes": file_size,
-            "start_time": start_time.isoformat(),
-            "end_time": end_time.isoformat(),
-            "coordinates": {"lat": lat, "lon": lon}
-        }
+            return {"status": "error", "message": "Data file not created."}
 
     except Exception as e:
-        error_details = traceback.format_exc()
-        return {
-            "status": "error",
-            "message": f"Download test failed: {str(e)}",
-            "traceback": error_details
-        }
-
-
-@app.get("/test-form")
-async def test_form():
-    """Simple HTML form for testing the predict endpoint"""
-    html_content = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Drift Prediction Test</title>
-        <style>
-            body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
-            .form-group { margin-bottom: 15px; }
-            label { display: block; margin-bottom: 5px; }
-            input, select { width: 100%; padding: 8px; box-sizing: border-box; }
-            button { padding: 10px 15px; background-color: #4CAF50; color: white; border: none; cursor: pointer; }
-            #result { margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 5px; white-space: pre-wrap; }
-        </style>
-    </head>
-    <body>
-        <h1>Drift Prediction Test Form</h1>
-        <div class="form-group">
-            <label for="lat">Latitude:</label>
-            <input type="number" id="lat" step="0.000001" value="34.0" />
-        </div>
-        <div class="form-group">
-            <label for="lon">Longitude:</label>
-            <input type="number" id="lon" step="0.000001" value="-47.0" />
-        </div>
-        <div class="form-group">
-            <label for="hours">Hours:</label>
-            <input type="number" id="hours" step="1" value="24" />
-        </div>
-        <div class="form-group">
-            <label for="object">Object Type:</label>
-            <select id="object">
-                <option value="Person_Adult_LifeJacket">Person with Life Jacket</option>
-                <option value="Person_Adult_NoLifeJacket">Person without Life Jacket</option>
-                <option value="Person_Adolescent_LifeJacket">Adolescent with Life Jacket</option>
-                <option value="Person_Child_LifeJacket">Child with Life Jacket</option>
-                <option value="Catamaran">Catamaran</option>
-                <option value="Hobby_Cat">Hobby Cat</option>
-                <option value="Fishing_Trawler">Fishing Trawler</option>
-                <option value="RHIB">RHIB</option>
-                <option value="SUP_Board">SUP Board</option>
-                <option value="Windsurfer">Windsurfer</option>
-                <option value="Kayak">Kayak</option>
-            </select>
-        </div>
-        <button onclick="submitPrediction()">Submit Prediction</button>
-
-        <div id="result">Results will appear here...</div>
-
-        <script>
-            async function submitPrediction() {
-                const result = document.getElementById('result');
-                result.textContent = 'Calculating...';
-
-                try {
-                    const response = await fetch('/predict', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            lat: parseFloat(document.getElementById('lat').value),
-                            lon: parseFloat(document.getElementById('lon').value),
-                            object_type: document.getElementById('object').value
-                        }),
-                    });
-
-                    const data = await response.json();
-                    result.textContent = JSON.stringify(data, null, 2);
-                } catch (error) {
-                    result.textContent = 'Error: ' + error.message;
-                }
-            }
-        </script>
-    </body>
-    </html>
-    """
-    return HTMLResponse(content=html_content)
+        return {"status": "error", "message": str(e), "details": traceback.format_exc()}
 
 
 # Update favicon route to look in the static folder
@@ -912,7 +873,7 @@ async def favicon():
         return FileResponse(png_path, media_type="image/png")
     else:
         print("No favicon found in static folder")
-        return Response(status_code=404)
+        return Response(status_code=status.HTTP_404_NOT_FOUND)
 
 
 # Make sure these functions are available for import
@@ -922,10 +883,30 @@ __all__ = [
     'calculate_drift_path',
     'haversine',
     'recommend_search_pattern',
-    'OBJECT_PROFILES'
+    'OBJECT_PROFILES',
+    'app'
 ]
 
 # Keep the standalone execution
 if __name__ == "__main__":
     print("\n\n*** STARTING STANDALONE DRIFT SERVER ON PORT 8001 ***\n\n")
+    # Ensure TEMPLATES_DIR and STATIC_DIR are correctly configured before running.
+    # The app mounts static files based on STATIC_DIR or static_dir.
+    # Verify these paths are correct relative to where this script is run.
+    # Example: if run from DriftTracker/backend/, then cli/static and cli/templates should exist.
+    
+    # Check if templates and static dirs are correctly found from this script's perspective
+    print(f"Running from: {os.getcwd()}")
+    print(f"Base dir for __init__.py: {BASE_DIR}")
+    print(f"Templates dir: {TEMPLATES_DIR}, Exists: {os.path.exists(TEMPLATES_DIR)}")
+    print(f"Static dir for app mount: {STATIC_DIR}, Exists: {os.path.exists(STATIC_DIR)}")
+    print(f"Static dir for explicit mount: {static_dir}, Exists: {os.path.exists(static_dir)}")
+
+    if not os.path.exists(TEMPLATES_DIR):
+        print(f"ERROR: Templates directory not found at {TEMPLATES_DIR}")
+        print("Please ensure your 'templates' folder is correctly placed relative to this script.")
+    if not os.path.exists(STATIC_DIR) and not os.path.exists(static_dir):
+         print(f"ERROR: Static directory not found at {STATIC_DIR} or {static_dir}")
+         print("Please ensure your 'static' folder is correctly placed relative to this script.")
+    
     uvicorn.run(app, host="127.0.0.1", port=8001)

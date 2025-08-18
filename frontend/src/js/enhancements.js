@@ -1,5 +1,5 @@
 // static/enhancements.js
-// Enhancements for KairoDrift app - adds geolocation, clipboard support, and form validation
+// Enhancements for DriftTracker app - adds geolocation, clipboard support, and form validation
 
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize current time display

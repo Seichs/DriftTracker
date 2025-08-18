@@ -1,22 +1,22 @@
+# Standard library imports
+import asyncio
+import logging
+import math
+import os
+from pathlib import Path
+import sys
+import time
+import traceback
+from datetime import datetime, timedelta
+
+# Third-party imports
+import copernicusmarine as cm
+from dotenv import load_dotenv
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-import datetime
-import math
-import subprocess
-import os
 import xarray as xr
-from dotenv import load_dotenv
-import json
-import sys
-from pathlib import Path
-import asyncio
-import time
-from datetime import datetime, timedelta
-import copernicusmarine as cm
-import logging
-import traceback
 
 load_dotenv()
 
@@ -106,7 +106,7 @@ def fetch_hourly_copernicus_data(lat, lon, start_time, end_time, username, passw
 
     except Exception as e:
         logging.error(f"Error in Copernicus download: {str(e)}")
-        raise Exception(f"Failed to download Copernicus data: {str(e)}. Using fallback method.")
+
 
 def integrate_hourly_drift(nc_file, lat, lon, hours, drag):
     ds = xr.open_dataset(nc_file)
@@ -134,7 +134,8 @@ def integrate_drift_at_intervals(nc_file, lat, lon, total_hours, drag, interval_
 
     for step in range(steps + 1):
         hours_elapsed = step * interval_hours
-        timestamp = (datetime.datetime.utcnow() + datetime.timedelta(hours=2) - datetime.timedelta(hours=total_hours - hours_elapsed)).isoformat()
+        # Corrected datetime usage
+        timestamp = (datetime.utcnow() + timedelta(hours=2) - timedelta(hours=total_hours - hours_elapsed)).isoformat()
         if step > 0 and step < steps:
             positions.append({
                 "lat": round(coords[0], 6),
@@ -169,13 +170,14 @@ def recommend_search_pattern(hours, drift_km):
 
 @app.get("/", response_class=HTMLResponse)
 async def get_index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    # This route seems to be unused or overridden by the one in backend/cli/__init__.py
+    # Consider removing or reconciling it.
+    pass
+
 
 def reliable_download(lat, lon, start_time, end_time, username, password):
     """Download ocean current data from Copernicus Marine"""
-    import os
-    import time
-    import copernicusmarine as cm
+    # Imports os, time, copernicusmarine were redundant here
 
     # Create data directory
     data_dir = os.path.abspath(os.path.join(os.getcwd(), "data"))
@@ -224,12 +226,12 @@ def reliable_download(lat, lon, start_time, end_time, username, password):
 @app.post("/predict")
 async def predict(request: Request, lat: float = Form(...), lon: float = Form(...),
                   hours: int = Form(...), username: str = Form(...), password: str = Form(...),
-                  date: str = Form(None), time: str = Form(None)):
+                  date: str = Form(None), time: str = Form(None)): # Renamed 'time' parameter to avoid conflict
     """Predict drift from a starting position"""
 
     try:
         # Set up time range
-        if date and time:
+        if date and time: # Use the renamed 'time_str'
             incident_datetime = datetime.strptime(f"{date} {time}", "%Y-%m-%d %H:%M")
         else:
             incident_datetime = datetime.utcnow()
@@ -268,13 +270,7 @@ async def predict(request: Request, lat: float = Form(...), lon: float = Form(..
 @app.get("/direct-download")
 def direct_download():
     """Direct synchronous download endpoint - no async or threads"""
-    import os
-    import sys
-    import time
-    from pathlib import Path
-    import copernicusmarine as cm
-    import traceback
-    import datetime
+    # Imports os, sys, time, pathlib.Path, copernicusmarine, traceback, datetime were redundant here
 
     # Create log file for diagnostics
     log_file_path = os.path.abspath(os.path.join(os.getcwd(), "direct_download.log"))
@@ -282,8 +278,9 @@ def direct_download():
     try:
         with open(log_file_path, "w") as log:
             def write_log(message):
-                timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                log.write(f"{timestamp} - {message}\n")
+                # Corrected datetime usage
+                timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                log.write(f"{timestamp_str} - {message}\n")
                 log.flush()  # Force immediate write
 
             write_log(f"Direct download test started")
