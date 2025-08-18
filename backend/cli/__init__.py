@@ -21,7 +21,7 @@ from pathlib import Path
 from fastapi import FastAPI, Request, HTTPException, Depends, Form
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, Response, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
+# Jinja2Templates not needed - serving static HTML files
 import uvicorn
 from fastapi.concurrency import run_in_threadpool
 from drifttracker.data_service import get_ocean_data_file
@@ -36,40 +36,31 @@ app = FastAPI(title="Standalone Drift Predictor")
 
 # Directory setup
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
-STATIC_DIR = os.path.join(BASE_DIR, "static")
 DATA_DIR = os.path.join(BASE_DIR, "data")
 
 # Ensure data directory exists
 os.makedirs(DATA_DIR, exist_ok=True)
 
-# Set up templates and static files if they exist
-if os.path.exists(TEMPLATES_DIR):
-    templates = Jinja2Templates(directory=TEMPLATES_DIR)
-    # Add global context variables available to all templates
-    templates.env.globals.update({
-        "favicon_url": "/favicon.ico",
-    })
+# Templates not needed - serving static HTML files from frontend directory
 
-if os.path.exists(STATIC_DIR):
-    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+# Frontend directory is mounted as /static instead
 
-# Also add this line for debugging
-print(f"Static files directory: {os.path.join(BASE_DIR, 'static')}")
-print(f"Templates directory: {os.path.join(BASE_DIR, 'templates')}")
+# Frontend directory will be mounted as /static for CSS, JS, and images
 
-# Add this after creating the app but before defining routes
-# Make sure this comes BEFORE any route definitions
-static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
-css_file = os.path.join(static_dir, "style.css")
-if os.path.exists(css_file):
-    print(f"CSS file exists at: {css_file}")
+# Mount frontend src directory for static files
+frontend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "frontend")
+if os.path.exists(frontend_dir):
+    # Mount the entire src directory as /static
+    src_dir = os.path.join(frontend_dir, "src")
+    if os.path.exists(src_dir):
+        app.mount("/static", StaticFiles(directory=src_dir), name="static")
+        print(f"Frontend src directory mounted at /static: {src_dir}")
+    else:
+        print(f"WARNING: Frontend src directory not found at: {src_dir}")
 else:
-    print(f"WARNING: CSS file not found at: {css_file}")
+    print(f"WARNING: Frontend directory not found at: {frontend_dir}")
 
-# Only mount static directory if it exists
-if os.path.exists(static_dir):
-    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+# Frontend directory is now mounted as /static, so we don't need the old static directory
 
 # Object profiles with drag factors
 OBJECT_PROFILES = {
@@ -93,6 +84,10 @@ LAT_KM_PER_DEGREE = 110.574
 # ── Copernicus test credentials ──────────────────────────────────────────────
 COPERNICUS_USERNAME = "postema45@gmail.com"
 COPERNICUS_PASSWORD = "IkHebAids1"
+
+# ── Admin credentials for DriftTracker ──────────────────────────────────────
+ADMIN_USERNAME = "admin"
+ADMIN_PASSWORD = "admin"
 
 
 # Add these functions right after where OBJECT_PROFILES is defined in your file
@@ -602,15 +597,17 @@ async def root(request: Request, error: Optional[str] = None):
     """Display the login page at the root URL"""
     # Add more debug to help troubleshoot
     print("Rendering login page")
-    return templates.TemplateResponse(
-        "login.html",
-        {
-            "request": request,
-            "error": error,
-            "favicon_url": "/static/favicon.png",
-            "css_url": "/static/style.css"  # Explicitly pass CSS URL
-        }
-    )
+    
+    # Read the frontend login.html file
+    frontend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "frontend")
+    login_file = os.path.join(frontend_dir, "html", "login.html")
+    
+    if os.path.exists(login_file):
+        with open(login_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+        return HTMLResponse(content=content)
+    else:
+        return HTMLResponse(content="<h1>Login page not found</h1>", status_code=404)
 
 
 # Process login form submission - fixed to properly handle password
@@ -623,24 +620,20 @@ async def process_login(request: Request):
 
     if not username or not password:
         # If either field is missing
-        return templates.TemplateResponse(
-            "login.html",
-            {
-                "request": request,
-                "error": "Username and password are required",
-                "username": username,
-                "favicon_url": "/static/favicon.png"
-            },
-            status_code=status.HTTP_400_BAD_REQUEST
-        )
+        return RedirectResponse(url="/?error=Username+and+password+are+required", status_code=status.HTTP_303_SEE_OTHER)
 
+    # Check admin credentials first
+    if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
+        print(f"Admin login successful for user: {username}")
+        return RedirectResponse(url=f"/app?username={username}", status_code=status.HTTP_303_SEE_OTHER)
+
+    # If not admin, try Copernicus Marine API authentication
     try:
-        # Try authenticating with Copernicus API
-        print(f"Attempting login with username: {username} and password: {'*' * len(password)}")
-
+        print(f"Attempting Copernicus login with username: {username} and password: {'*' * len(password)}")
         cm.login(username=username, password=password, force_overwrite=True)
-
+        
         # If successful, redirect to the main application page
+        print(f"Copernicus login successful for user: {username}")
         return RedirectResponse(url=f"/app?username={username}", status_code=status.HTTP_303_SEE_OTHER)
 
     except Exception as e:
@@ -649,16 +642,7 @@ async def process_login(request: Request):
         print(f"Login error: {str(e)}")
 
         # Return to login page with error
-        return templates.TemplateResponse(
-            "login.html",
-            {
-                "request": request,
-                "error": error_msg,
-                "username": username,
-                "favicon_url": "/static/favicon.png"
-            },
-            status_code=status.HTTP_401_UNAUTHORIZED
-        )
+        return RedirectResponse(url=f"/?error={error_msg}", status_code=status.HTTP_303_SEE_OTHER)
 
 
 # Make the main application page at /app
@@ -671,15 +655,17 @@ async def app_home(request: Request, username: Optional[str] = None):
 
     # Display the main application page
     current_timestamp = datetime.now(timezone.utc).isoformat()
-    return templates.TemplateResponse(
-        "index.html",
-        {
-            "request": request,
-            "current_timestamp": current_timestamp,
-            "username": username,  # Pass this along for display
-            "object_profiles": OBJECT_PROFILES
-        }
-    )
+    
+    # Read the frontend index.html file
+    frontend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "frontend")
+    index_file = os.path.join(frontend_dir, "html", "index.html")
+    
+    if os.path.exists(index_file):
+        with open(index_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+        return HTMLResponse(content=content)
+    else:
+        return HTMLResponse(content="<h1>Main app page not found</h1>", status_code=404)
 
 
 # Update your predict route to also check for username
@@ -758,8 +744,9 @@ async def predict(request: Request):
         # Recommend search pattern
         pattern_name, pattern_desc = recommend_search_pattern(float(hours), total_distance_km)
         
-        return templates.TemplateResponse("result.html", {
-            "request": request,
+        # Return JSON response instead of template
+        return JSONResponse(content={
+            "status": "success",
             "orig_lat": lat,
             "orig_lon": lon,
             "new_lat": new_lat,
@@ -778,8 +765,8 @@ async def predict(request: Request):
     except Exception as e:
         # Handle errors
         print(f"Prediction error: {str(e)}")
-        return templates.TemplateResponse("result.html", {
-            "request": request,
+        return JSONResponse(content={
+            "status": "error",
             "error": True,
             "error_message": f"An error occurred during prediction: {str(e)}",
         })
@@ -853,27 +840,7 @@ async def debug_data(lat: float, lon: float):
         return {"status": "error", "message": str(e), "details": traceback.format_exc()}
 
 
-# Update favicon route to look in the static folder
-@app.get('/favicon.ico', include_in_schema=False)
-async def favicon():
-    # Check for both favicon.ico and favicon.png in the static folder
-    ico_path = os.path.join(STATIC_DIR, 'favicon.ico')
-    png_path = os.path.join(STATIC_DIR, 'favicon.png')
-
-    # Print debug info
-    print(f"Looking for favicon.ico at: {ico_path} - Exists: {os.path.exists(ico_path)}")
-    print(f"Looking for favicon.png at: {png_path} - Exists: {os.path.exists(png_path)}")
-
-    # Try ico first, then png
-    if os.path.exists(ico_path):
-        print(f"Serving favicon.ico from {ico_path}")
-        return FileResponse(ico_path, media_type="image/x-icon")
-    elif os.path.exists(png_path):
-        print(f"Serving favicon.png from {png_path}")
-        return FileResponse(png_path, media_type="image/png")
-    else:
-        print("No favicon found in static folder")
-        return Response(status_code=status.HTTP_404_NOT_FOUND)
+# Favicon is now served automatically by the static file mounting
 
 
 # Make sure these functions are available for import
