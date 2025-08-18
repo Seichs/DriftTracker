@@ -67,7 +67,7 @@ jobs:
         fail_ci_if_error: false
     
     - name: Upload test results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: test-results-${{ matrix.python-version }}
         path: |
@@ -98,7 +98,7 @@ jobs:
         pytest tests/e2e/ -v --junitxml=e2e-test-results.xml
     
     - name: Upload E2E test results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: e2e-test-results
         path: e2e-test-results.xml
@@ -126,7 +126,7 @@ jobs:
         black --check --diff backend/ || true
     
     - name: Upload quality reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: quality-reports
         path: |
