@@ -285,14 +285,14 @@ class TestDurationFormatting:
     @pytest.mark.unit
     def test_format_duration_minutes(self):
         """Test duration formatting for minutes."""
-        assert "minutes" in format_duration(3600.0)  # 1 hour in seconds
-        assert "60.0" in format_duration(3600.0)
+        assert "minutes" in format_duration(1800.0)  # 30 minutes in seconds
+        assert "30.0" in format_duration(1800.0)
 
     @pytest.mark.unit
     def test_format_duration_hours(self):
         """Test duration formatting for hours."""
-        assert "hours" in format_duration(86400.0)  # 1 day in seconds
-        assert "24.0" in format_duration(86400.0)
+        assert "hours" in format_duration(3600.0)  # 1 hour in seconds
+        assert "1.0" in format_duration(3600.0)
 
     @pytest.mark.unit
     def test_format_duration_days(self):

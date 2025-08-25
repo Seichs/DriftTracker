@@ -67,3 +67,9 @@ node_modules/
 *config.ini
 # Cursor IDE configuration
 .cursor/
+
+# macOS system files
+.DS_Store
+._*
+.AppleDouble
+.LSOverride

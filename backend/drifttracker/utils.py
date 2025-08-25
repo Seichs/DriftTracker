@@ -219,6 +219,10 @@ def parse_datetime_string(dt_string: str) -> Optional[datetime]:
     Returns:
         Parsed datetime object or None if parsing fails
     """
+    # Handle None input
+    if dt_string is None:
+        return None
+        
     formats = [
         "%Y-%m-%d %H:%M:%S",
         "%Y-%m-%d %H:%M",
