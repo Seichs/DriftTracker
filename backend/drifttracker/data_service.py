@@ -8,15 +8,18 @@ import logging
 # Third-party imports
 import copernicusmarine as cm
 
+# Import centralized logging setup
+from .common_utils import setup_logging
+
 # Configure logging
-logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+setup_logging(level="INFO", log_file="drifttracker.log")
 logger = logging.getLogger("data_service")
+
+# Import centralized configuration
+from .config import COPERNICUS_USERNAME, COPERNICUS_PASSWORD
 
 # Constants
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
-COPERNICUS_USERNAME = "postema45@gmail.com"
-COPERNICUS_PASSWORD = "IkHebAids1"
 
 
 def ensure_data_dir():

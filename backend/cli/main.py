@@ -25,26 +25,14 @@ app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
-object_profiles = {
-    "Person_Adult_LifeJacket": {"drag_factor": 0.8},
-    "Person_Adult_NoLifeJacket": {"drag_factor": 1.1},
-    "Person_Adolescent_LifeJacket": {"drag_factor": 0.9},
-    "Person_Child_LifeJacket": {"drag_factor": 1.0},
-    "Catamaran": {"drag_factor": 0.4},
-    "Hobby_Cat": {"drag_factor": 0.5},
-    "Fishing_Trawler": {"drag_factor": 0.2},
-    "RHIB": {"drag_factor": 0.6},
-    "SUP_Board": {"drag_factor": 1.2},
-    "Windsurfer": {"drag_factor": 1.3},
-    "Kayak": {"drag_factor": 1.1}
-}
+# Import centralized object profiles
+from drifttracker.config import OBJECT_PROFILES as object_profiles
+
+# Import centralized logging setup
+from drifttracker.common_utils import setup_logging
 
 # Force logging to output to stderr
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[logging.StreamHandler(sys.stderr)]
-)
+setup_logging(level="INFO", log_file="drifttracker.log")
 logger = logging.getLogger(__name__)
 
 # Add a simple sanity check that will print when the module loads

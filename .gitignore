@@ -65,3 +65,5 @@ node_modules/
 # Credentials
 *credentials*
 *config.ini
+# Cursor IDE configuration
+.cursor/

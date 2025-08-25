@@ -62,150 +62,28 @@ else:
 
 # Frontend directory is now mounted as /static, so we don't need the old static directory
 
-# Object profiles with drag factors
-OBJECT_PROFILES = {
-    "Person_Adult_LifeJacket": {"drag_factor": 0.8},
-    "Person_Adult_NoLifeJacket": {"drag_factor": 1.1},
-    "Person_Adolescent_LifeJacket": {"drag_factor": 0.9},
-    "Person_Child_LifeJacket": {"drag_factor": 1.0},
-    "Catamaran": {"drag_factor": 0.4},
-    "Hobby_Cat": {"drag_factor": 0.5},
-    "Fishing_Trawler": {"drag_factor": 0.2},
-    "RHIB": {"drag_factor": 0.6},
-    "SUP_Board": {"drag_factor": 1.2},
-    "Windsurfer": {"drag_factor": 1.3},
-    "Kayak": {"drag_factor": 1.1}
-}
-
-# Add these constants if they're not already defined
-LON_KM_PER_DEGREE_AT_EQUATOR = 111.32
-LAT_KM_PER_DEGREE = 110.574
-
-# ── Copernicus test credentials ──────────────────────────────────────────────
-COPERNICUS_USERNAME = "postema45@gmail.com"
-COPERNICUS_PASSWORD = "IkHebAids1"
-
-# ── Admin credentials for DriftTracker ──────────────────────────────────────
-ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD = "admin"
+# Import centralized configuration
+from drifttracker.config import (
+    OBJECT_PROFILES, 
+    LON_KM_PER_DEGREE_AT_EQUATOR, 
+    LAT_KM_PER_DEGREE,
+    COPERNICUS_USERNAME,
+    COPERNICUS_PASSWORD,
+    ADMIN_USERNAME,
+    ADMIN_PASSWORD
+)
 
 
-# Add these functions right after where OBJECT_PROFILES is defined in your file
-# (around line 59 after the OBJECT_PROFILES dictionary)
-
-def get_object_properties(object_type):
-    """Get drift properties for different object types"""
-    # Default properties
-    default_props = {
-        "current_factor": 1.0,  # Current influence
-        "wind_factor": 0.0,  # Wind influence (windage)
-        "survival_hours": 24  # Estimated survival time
-    }
-
-    # Object-specific properties
-    if "Person" in object_type:
-        if "LifeJacket" in object_type:
-            if "Child" in object_type:
-                return {
-                    "current_factor": 1.0,
-                    "wind_factor": 0.015,
-                    "survival_hours": 12
-                }
-            else:  # Adult or Adolescent
-                return {
-                    "current_factor": 1.0,
-                    "wind_factor": 0.01,
-                    "survival_hours": 24
-                }
-        else:  # No life jacket
-            return {
-                "current_factor": 1.0,
-                "wind_factor": 0.005,
-                "survival_hours": 6
-            }
-    elif "Catamaran" in object_type or "Hobby_Cat" in object_type:
-        return {
-            "current_factor": 1.0,
-            "wind_factor": 0.05,
-            "survival_hours": 72
-        }
-    elif "Fishing_Trawler" in object_type:
-        return {
-            "current_factor": 1.0,
-            "wind_factor": 0.03,
-            "survival_hours": 120
-        }
-    elif "RHIB" in object_type:
-        return {
-            "current_factor": 1.0,
-            "wind_factor": 0.02,
-            "survival_hours": 48
-        }
-    elif "SUP_Board" in object_type or "Windsurfer" in object_type:
-        return {
-            "current_factor": 1.0,
-            "wind_factor": 0.06,
-            "survival_hours": 12
-        }
-    elif "Kayak" in object_type:
-        return {
-            "current_factor": 1.0,
-            "wind_factor": 0.01,
-            "survival_hours": 24
-        }
-
-    # Return default properties if object type not recognized
-    return default_props
+# Import centralized object properties function
+from drifttracker.config import get_object_properties
 
 
-def calculate_distance(lat1, lon1, lat2, lon2):
-    """Calculate distance between two coordinates in kilometers"""
-    # Earth radius in kilometers
-    R = 6371.0
-
-    # Convert coordinates to radians
-    lat1_rad = math.radians(lat1)
-    lon1_rad = math.radians(lon1)
-    lat2_rad = math.radians(lat2)
-    lon2_rad = math.radians(lon2)
-
-    # Calculate differences
-    dlat = lat2_rad - lat1_rad
-    dlon = lon2_rad - lon1_rad
-
-    # Haversine formula
-    a = math.sin(dlat / 2) ** 2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(dlon / 2) ** 2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-
-    # Distance in kilometers
-    distance = R * c
-
-    return distance
+# Import centralized distance calculation function
+from drifttracker.common_utils import calculate_distance
 
 
-def get_currents_at_position_and_time(ds, lat, lon, time):
-    """Extract current velocities at a specific position and time"""
-    try:
-        # Find nearest data points
-        u_current = float(ds.uo.sel(
-            time=time,
-            latitude=lat,
-            longitude=lon,
-            method="nearest"
-        ).values)
-
-        v_current = float(ds.vo.sel(
-            time=time,
-            latitude=lat,
-            longitude=lon,
-            method="nearest"
-        ).values)
-
-        return u_current, v_current
-    except Exception as e:
-        print(f"Error getting currents: {e}")
-        # Return reasonable defaults
-        return 0.0, 0.0
+# Import centralized current extraction function
+from drifttracker.common_utils import get_currents_at_position
 
 
 def create_synthetic_ocean_data(lat, lon, start_time, end_time):

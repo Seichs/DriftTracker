@@ -188,7 +188,7 @@ class TestDriftCalculator:
     @pytest.mark.unit
     def test_recommend_search_pattern_short_time(self, drift_calculator):
         """Test search pattern recommendation for short time."""
-        pattern, description = drift_calculator.recommend_search_pattern(0.5, 1.0)
+        pattern, description = drift_calculator.recommend_search_pattern(0.5, 1.0, "Person_Adult_LifeJacket")
         
         assert pattern == "Sector Search"
         assert "recent" in description.lower()
@@ -196,7 +196,7 @@ class TestDriftCalculator:
     @pytest.mark.unit
     def test_recommend_search_pattern_medium_time(self, drift_calculator):
         """Test search pattern recommendation for medium time."""
-        pattern, description = drift_calculator.recommend_search_pattern(2.0, 5.0)
+        pattern, description = drift_calculator.recommend_search_pattern(2.0, 5.0, "Person_Adult_LifeJacket")
         
         assert pattern == "Expanding Square"
         assert "moderate" in description.lower()
@@ -204,7 +204,7 @@ class TestDriftCalculator:
     @pytest.mark.unit
     def test_recommend_search_pattern_long_time(self, drift_calculator):
         """Test search pattern recommendation for long time."""
-        pattern, description = drift_calculator.recommend_search_pattern(10.0, 20.0)
+        pattern, description = drift_calculator.recommend_search_pattern(10.0, 20.0, "Catamaran")
         
         assert pattern == "Parallel Sweep"
         assert "large" in description.lower()

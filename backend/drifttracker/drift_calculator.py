@@ -1,12 +1,15 @@
 """
 Drift calculation module for ocean drift prediction
 """
-import math
 import numpy as np
 import xarray as xr
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Tuple, Optional
 import logging
+import math
+
+from .config import EARTH_RADIUS_KM, METERS_PER_DEGREE_LAT, METERS_PER_DEGREE_LON_AT_EQUATOR
+from .common_utils import calculate_distance, get_currents_at_position
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -15,9 +18,9 @@ class DriftCalculator:
     """Calculate drift trajectories for objects in ocean currents"""
     
     def __init__(self):
-        self.earth_radius_km = 6371.0
-        self.meters_per_degree_lat = 111574.0  # meters per degree of latitude
-        self.meters_per_degree_lon_at_equator = 111320.0  # meters per degree longitude at equator
+        self.earth_radius_km = EARTH_RADIUS_KM
+        self.meters_per_degree_lat = METERS_PER_DEGREE_LAT
+        self.meters_per_degree_lon_at_equator = METERS_PER_DEGREE_LON_AT_EQUATOR
     
     def calculate_distance(self, lat1: float, lon1: float, lat2: float, lon2: float) -> float:
         """
@@ -30,22 +33,7 @@ class DriftCalculator:
         Returns:
             Distance in kilometers
         """
-        # Convert to radians
-        lat1_rad = math.radians(lat1)
-        lon1_rad = math.radians(lon1)
-        lat2_rad = math.radians(lat2)
-        lon2_rad = math.radians(lon2)
-        
-        # Calculate differences
-        dlat = lat2_rad - lat1_rad
-        dlon = lon2_rad - lon1_rad
-        
-        # Haversine formula
-        a = (math.sin(dlat / 2) ** 2 + 
-             math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(dlon / 2) ** 2)
-        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-        
-        return self.earth_radius_km * c
+        return calculate_distance(lat1, lon1, lat2, lon2)
     
     def get_object_properties(self, object_type: str) -> Dict[str, float]:
         """
@@ -57,49 +45,8 @@ class DriftCalculator:
         Returns:
             Dictionary with drift properties
         """
-        default_props = {
-            "current_factor": 1.0,  # Current influence
-            "wind_factor": 0.0,     # Wind influence (windage)
-            "drag_factor": 1.0      # Overall drag factor
-        }
-        
-        # Object-specific properties
-        if "Person" in object_type:
-            if "LifeJacket" in object_type:
-                if "Child" in object_type:
-                    return {
-                        "current_factor": 1.0,
-                        "wind_factor": 0.015,
-                        "drag_factor": 1.0
-                    }
-                else:  # Adult or Adolescent
-                    return {
-                        "current_factor": 1.0,
-                        "wind_factor": 0.01,
-                        "drag_factor": 0.8 if "Adult" in object_type else 0.9
-                    }
-            else:  # No life jacket
-                return {
-                    "current_factor": 1.0,
-                    "wind_factor": 0.005,
-                    "drag_factor": 1.1
-                }
-        elif "Catamaran" in object_type:
-            return {"current_factor": 1.0, "wind_factor": 0.05, "drag_factor": 0.4}
-        elif "Hobby_Cat" in object_type:
-            return {"current_factor": 1.0, "wind_factor": 0.05, "drag_factor": 0.5}
-        elif "Fishing_Trawler" in object_type:
-            return {"current_factor": 1.0, "wind_factor": 0.03, "drag_factor": 0.2}
-        elif "RHIB" in object_type:
-            return {"current_factor": 1.0, "wind_factor": 0.02, "drag_factor": 0.6}
-        elif "SUP_Board" in object_type:
-            return {"current_factor": 1.0, "wind_factor": 0.06, "drag_factor": 1.2}
-        elif "Windsurfer" in object_type:
-            return {"current_factor": 1.0, "wind_factor": 0.06, "drag_factor": 1.3}
-        elif "Kayak" in object_type:
-            return {"current_factor": 1.0, "wind_factor": 0.01, "drag_factor": 1.1}
-        
-        return default_props
+        from .config import get_object_properties as get_props
+        return get_props(object_type)
     
     def get_currents_at_position(self, ds: xr.Dataset, lat: float, lon: float, 
                                 time: Optional[datetime] = None) -> Tuple[float, float]:
@@ -115,55 +62,7 @@ class DriftCalculator:
         Returns:
             Tuple of (u_current, v_current) in m/s
         """
-        try:
-            if time is not None and 'time' in ds.dims:
-                # Find nearest time
-                u_current = float(ds.uo.sel(
-                    time=time,
-                    latitude=lat,
-                    longitude=lon,
-                    method="nearest"
-                ).values)
-                
-                v_current = float(ds.vo.sel(
-                    time=time,
-                    latitude=lat,
-                    longitude=lon,
-                    method="nearest"
-                ).values)
-            else:
-                # Use first time step if available
-                if 'time' in ds.dims and len(ds.time) > 0:
-                    u_current = float(ds.uo.isel(time=0).interp(
-                        latitude=lat,
-                        longitude=lon,
-                        method="nearest"
-                    ).values)
-                    
-                    v_current = float(ds.vo.isel(time=0).interp(
-                        latitude=lat,
-                        longitude=lon,
-                        method="nearest"
-                    ).values)
-                else:
-                    u_current = float(ds.uo.interp(
-                        latitude=lat,
-                        longitude=lon,
-                        method="nearest"
-                    ).values)
-                    
-                    v_current = float(ds.vo.interp(
-                        latitude=lat,
-                        longitude=lon,
-                        method="nearest"
-                    ).values)
-            
-            return u_current, v_current
-            
-        except Exception as e:
-            logger.warning(f"Error getting currents at {lat}, {lon}: {e}")
-            # Return reasonable defaults
-            return 0.0, 0.0
+        return get_currents_at_position(ds, lat, lon, time)
     
     def calculate_drift_trajectory(self, initial_lat: float, initial_lon: float,
                                  drift_hours: float, object_type: str,
@@ -198,7 +97,7 @@ class DriftCalculator:
             if start_time:
                 timestamp = start_time.isoformat()
             else:
-                timestamp = datetime.utcnow().isoformat()
+                timestamp = datetime.now(timezone.utc).isoformat()
             
             trajectory.append({
                 "lat": round(current_lat, 6),
@@ -247,7 +146,7 @@ class DriftCalculator:
                     if current_time:
                         timestamp = current_time.isoformat()
                     else:
-                        timestamp = datetime.utcnow().isoformat()
+                        timestamp = datetime.now(timezone.utc).isoformat()
                     
                     trajectory.append({
                         "lat": round(current_lat, 6),
@@ -275,7 +174,7 @@ class DriftCalculator:
         drift_lon_per_hour = 0.015 * props["current_factor"] * props["drag_factor"]
         
         trajectory = [{"lat": lat, "lon": lon, "hours_elapsed": 0.0, 
-                     "timestamp": datetime.utcnow().isoformat()}]
+                     "timestamp": datetime.now(timezone.utc).isoformat()}]
         
         for h in range(1, int(hours) + 1):
             new_lat = lat + (drift_lat_per_hour * h)
@@ -284,7 +183,7 @@ class DriftCalculator:
                 "lat": round(new_lat, 6),
                 "lon": round(new_lon, 6),
                 "hours_elapsed": float(h),
-                "timestamp": (datetime.utcnow() + timedelta(hours=h)).isoformat()
+                "timestamp": (datetime.now(timezone.utc) + timedelta(hours=h)).isoformat()
             })
         
         return trajectory
@@ -308,5 +207,7 @@ class DriftCalculator:
             return "Expanding Square", "Covers moderate uncertainty zones."
         elif "Life" in object_type and drift_hours < 24:
             return "Parallel Track", "Person with life jacket - expanded search area."
+        elif drift_hours >= 10 or drift_distance_km >= 20:
+            return "Parallel Sweep", "Large area coverage for extended time/distance."
         else:
             return "Parallel Sweep", "Large area coverage for extended time/distance."

@@ -11,21 +11,8 @@ import numpy as np
 # Configure logging
 logger = logging.getLogger(__name__)
 
-def setup_logging(level: str = "INFO") -> None:
-    """
-    Set up logging configuration
-    
-    Args:
-        level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-    """
-    logging.basicConfig(
-        level=getattr(logging, level.upper()),
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.StreamHandler(),
-            logging.FileHandler('drifttracker.log')
-        ]
-    )
+# Import centralized logging setup
+from .common_utils import setup_logging
 
 def validate_coordinates(lat: float, lon: float) -> bool:
     """
