@@ -93,6 +93,8 @@
                 object_type: urlParams.get('object_type') || 'Unknown',
                 hours: parseFloat(urlParams.get('hours')) || 6,
                 trajectory: trajectory,
+                search_pattern_name: urlParams.get('search_pattern_name') || 'Parallel Sweep',
+                search_pattern_description: urlParams.get('search_pattern_description') || 'Large coverage when drift is wide or time is long.',
                 error: urlParams.get('error') === 'true',
                 message: urlParams.get('message') || ''
             };
@@ -100,7 +102,6 @@
 
         document.addEventListener('DOMContentLoaded', function() {
             const data = getDriftData();
-            const urlParams = new URLSearchParams(window.location.search); // Add this line
             
             if (data.error) {
                 document.getElementById('start-position').textContent = 'Error occurred';
@@ -113,8 +114,8 @@
             document.getElementById('drift-distance').textContent = `${data.drift_distance.toFixed(2)} km`;
             document.getElementById('object-type').textContent = data.object_type;
             // Get search pattern from URL or use default
-            const searchPattern = urlParams.get('search_pattern_name') || 'Parallel Sweep';
-            const searchPatternDesc = urlParams.get('search_pattern_description') || 'Large coverage when drift is wide or time is long.';
+            const searchPattern = data.search_pattern_name || 'Parallel Sweep';
+            const searchPatternDesc = data.search_pattern_description || 'Large coverage when drift is wide or time is long.';
             document.getElementById('search-pattern').textContent = `${searchPattern} - ${searchPatternDesc}`;
 
             updateTrajectoryTable(data.trajectory);

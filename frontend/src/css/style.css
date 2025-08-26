@@ -41,6 +41,8 @@ body {
     flex-direction: column;
     position: relative;
     z-index: 1;
+    justify-content: flex-start;
+    gap: 20px;
 }
 
 .sidebar h2 {
@@ -298,49 +300,9 @@ body {
     color: rgba(255, 255, 255, 0.7) !important;
 }
 
-.status-indicator {
-    display: inline-block;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    margin-right: 6px;
-}
 
-.status-success {
-    background-color: var(--success);
-    box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
-}
 
-.status-warning {
-    background-color: var(--warning);
-    box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
-}
 
-.status-danger {
-    background-color: var(--danger);
-    box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
-}
-
-@keyframes slideIn {
-    from {
-        opacity: 0;
-        transform: translateY(20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-@keyframes pulse {
-    0% { opacity: 0.6; }
-    50% { opacity: 1; }
-    100% { opacity: 0.6; }
-}
-
-.animate-in {
-    animation: slideIn 0.4s ease-out;
-}
 
 @media (max-width: 768px) {
     .container {
@@ -422,6 +384,109 @@ body {
 
 .leaflet-popup-content strong {
     color: var(--primary);
+}
+
+
+
+/* Results Page - Using existing index.html styling */
+.results-summary {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: var(--radius);
+    padding: 15px;
+    margin-bottom: 15px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.results-summary h3 {
+    font-size: 16px;
+    margin-top: 0;
+    font-weight: 600;
+    margin-bottom: 12px;
+    letter-spacing: -0.5px;
+}
+
+.summary-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.summary-item {
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: var(--radius);
+    padding: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.summary-item label {
+    display: block;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+    font-weight: 500;
+    font-size: 11px;
+    letter-spacing: 0.3px;
+}
+
+.summary-item span {
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+    color: var(--text-light);
+}
+
+.trajectory-details {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: var(--radius);
+    padding: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    margin-bottom: 20px;
+}
+
+.btn-secondary {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    display: block;
+    text-align: center;
+    width: 100%;
+}
+
+
+
+/* Style trajectory table */
+.trajectory-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.trajectory-table th,
+.trajectory-table td {
+    padding: 8px;
+    text-align: left;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.trajectory-table th {
+    background: rgba(255, 255, 255, 0.05);
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.trajectory-table td {
+    color: var(--text-light);
+}
+
+
+
+.info-section {
+    margin-top: auto;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.info-section .btn {
+    margin: 0 auto;
+    max-width: 200px;
 }
 
 /* Login page styles */
@@ -574,113 +639,4 @@ body {
 
 .login-container .login-footer a:hover {
     color: #a0d2f7;
-}
-
-/* Results Page - Using existing index.html styling */
-.results-summary {
-    background: rgba(255, 255, 255, 0.03);
-    border-radius: var(--radius);
-    padding: 15px;
-    margin-bottom: 15px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.results-summary h3 {
-    font-size: 16px;
-    margin-top: 0;
-    font-weight: 600;
-    margin-bottom: 12px;
-    letter-spacing: -0.5px;
-}
-
-.summary-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.summary-item {
-    background: rgba(255, 255, 255, 0.02);
-    border-radius: var(--radius);
-    padding: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.03);
-}
-
-.summary-item label {
-    display: block;
-    color: var(--text-muted);
-    margin-bottom: 4px;
-    font-weight: 500;
-    font-size: 11px;
-    letter-spacing: 0.3px;
-}
-
-.summary-item span {
-    font-size: 13px;
-    font-weight: 500;
-    letter-spacing: 0.3px;
-    color: var(--text-light);
-}
-
-.trajectory-details {
-    background: rgba(255, 255, 255, 0.03);
-    border-radius: var(--radius);
-    padding: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    margin-bottom: 20px;
-}
-
-.btn-secondary {
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    display: block;
-    text-align: center;
-    width: 100%;
-}
-
-/* Fix sidebar scrolling */
-.sidebar {
-    overflow-x: hidden;
-    overflow-y: auto;
-}
-
-/* Style trajectory table */
-.trajectory-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 12px;
-}
-
-.trajectory-table th,
-.trajectory-table td {
-    padding: 8px;
-    text-align: left;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.trajectory-table th {
-    background: rgba(255, 255, 255, 0.05);
-    font-weight: 600;
-    color: var(--text-muted);
-}
-
-.trajectory-table td {
-    color: var(--text-light);
-}
-
-/* Improve sidebar layout for results page */
-.sidebar {
-    justify-content: flex-start;
-    gap: 20px;
-}
-
-.info-section {
-    margin-top: auto;
-    padding-top: 20px;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.info-section .btn {
-    margin: 0 auto;
-    max-width: 200px;
 }
