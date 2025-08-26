@@ -23,9 +23,45 @@ DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
 
 def ensure_data_dir():
-    """Ensure the data directory exists"""
+    """Ensure the data directory exists with proper structure"""
+    # Create main data directory
     os.makedirs(DATA_DIR, exist_ok=True)
+    
+    # Create subdirectories for better organization
+    subdirs = ["currents", "archived", "temp", "logs"]
+    for subdir in subdirs:
+        os.makedirs(os.path.join(DATA_DIR, subdir), exist_ok=True)
+    
     return DATA_DIR
+
+def get_data_file_path(lat: float, lon: float, start_time: datetime.datetime, end_time: datetime.datetime) -> str:
+    """
+    Generate organized file path for ocean data
+    
+    Args:
+        lat, lon: Coordinates
+        start_time, end_time: Time range
+        
+    Returns:
+        Organized file path
+    """
+    ensure_data_dir()
+    
+    # Round coordinates for grouping
+    lat_rounded = round(lat, 1)  # Group by 0.1 degree
+    lon_rounded = round(lon, 1)
+    
+    # Create date-based subdirectory
+    date_str = start_time.strftime("%Y%m")
+    date_dir = os.path.join(DATA_DIR, "currents", date_str)
+    os.makedirs(date_dir, exist_ok=True)
+    
+    # Generate filename
+    start_str = start_time.strftime("%Y%m%d%H")
+    end_str = end_time.strftime("%Y%m%d%H")
+    
+    filename = f"currents_lat{lat_rounded}_lon{lon_rounded}_{start_str}_{end_str}.nc"
+    return os.path.join(date_dir, filename)
 
 
 def get_ocean_data_file(lat: float, lon: float, 

@@ -489,9 +489,9 @@ async def root(request: Request, error: Optional[str] = None):
 
 
 # Process login form submission - fixed to properly handle password
-@app.post("/")
+@app.post("/login")
 async def process_login(request: Request):
-    """Process login form submission from root URL"""
+    """Process login form submission from login route"""
     form = await request.form()
     username = form.get("username", "")
     password = form.get("password", "")
@@ -720,6 +720,154 @@ async def debug_data(lat: float, lon: float):
 
 # Favicon is now served automatically by the static file mounting
 
+@app.get("/test-copernicus")
+async def test_copernicus_connection():
+    """Simple test endpoint to check Copernicus API connection"""
+    try:
+        # Test credentials
+        if not COPERNICUS_USERNAME or not COPERNICUS_PASSWORD:
+            return {"status": "error", "message": "Copernicus credentials not set"}
+        
+        # Test basic connection
+        return {
+            "status": "success",
+            "message": "Copernicus credentials configured",
+            "username": COPERNICUS_USERNAME[:3] + "***",  # Hide full username
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.get("/test-drift/{lat}/{lon}")
+async def test_drift_calculation(lat: float, lon: float):
+    """Test drift calculation with sample data"""
+    try:
+        # Create synthetic ocean data for testing
+        synthetic_data = create_synthetic_ocean_data(lat, lon, 
+                                                   datetime.now(timezone.utc) - timedelta(hours=1),
+                                                   datetime.now(timezone.utc))
+        
+        # Test drift calculation
+        drift_path = calculate_drift_path(synthetic_data, lat, lon, 6.0, 1.0)
+        
+        return {
+            "status": "success",
+            "test_coordinates": {"lat": lat, "lon": lon},
+            "drift_hours": 6.0,
+            "drift_path_points": len(drift_path),
+            "final_position": drift_path[-1] if drift_path else None,
+            "message": "Drift calculation test successful"
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.get("/test-ml-models")
+async def test_ml_models():
+    """Test if ML models are loading correctly"""
+    try:
+        ml_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "ml")
+        models = ["model_drift.pkl", "model_pattern.pkl", "object_encoder.pkl", "pattern_encoder.pkl"]
+        
+        model_status = {}
+        for model in models:
+            model_path = os.path.join(ml_dir, model)
+            model_status[model] = {
+                "exists": os.path.exists(model_path),
+                "size_mb": round(os.path.getsize(model_path) / (1024 * 1024), 2) if os.path.exists(model_path) else 0
+            }
+        
+        return {
+            "status": "success",
+            "ml_directory": ml_dir,
+            "models": model_status,
+            "message": "ML model status check complete"
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.get("/result")
+async def result_page():
+    """Render the results page"""
+    result_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "frontend", "html", "result.html")
+    
+    if os.path.exists(result_file):
+        with open(result_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+        return HTMLResponse(content=content)
+    else:
+        return HTMLResponse(content="<h1>Results page not found</h1>", status_code=404)
+
+@app.post("/result")
+async def handle_result_submission(request: Request):
+    """Handle form submission and redirect to results page with data"""
+    try:
+        form_data = await request.form()
+        
+        # Extract form data
+        lat = float(form_data.get("lat", 52.5))
+        lon = float(form_data.get("lon", 4.2))
+        object_type = form_data.get("object_type", "Unknown")
+        date = form_data.get("date", "")
+        time = form_data.get("time", "")
+        hours = float(form_data.get("hours", 6.0))
+        
+        # Calculate actual drift trajectory using your existing functions
+        try:
+            # Create synthetic ocean data for now (you can integrate real Copernicus data later)
+            synthetic_data = create_synthetic_ocean_data(lat, lon, 
+                                                       datetime.now(timezone.utc) - timedelta(hours=1),
+                                                       datetime.now(timezone.utc))
+            
+            # Calculate drift path
+            drift_path = calculate_drift_path(synthetic_data, lat, lon, hours, 1.0)
+            
+            # Calculate final position and distance
+            if drift_path and len(drift_path) > 0:
+                final_pos = drift_path[-1]
+                new_lat = final_pos["lat"]
+                new_lon = final_pos["lon"]
+                
+                # Calculate total distance
+                total_distance = 0
+                if len(drift_path) > 1:
+                    total_distance = haversine(lat, lon, new_lat, new_lon)
+                
+                # Convert drift path to JSON-serializable format
+                trajectory_data = []
+                for point in drift_path:
+                    trajectory_data.append({
+                        "lat": point["lat"],
+                        "lon": point["lon"],
+                        "hours_elapsed": point.get("hours_elapsed", 0)
+                    })
+                
+                # Get search pattern recommendation
+                pattern_name, pattern_desc = recommend_search_pattern(hours, total_distance)
+                
+                # Redirect with real drift data and search pattern
+                redirect_url = f"/result?orig_lat={lat}&orig_lon={lon}&new_lat={new_lat}&new_lon={new_lon}&drift_distance={total_distance:.2f}&object_type={object_type}&hours={hours}&trajectory={json.dumps(trajectory_data)}&search_pattern_name={pattern_name}&search_pattern_description={pattern_desc}"
+                
+                return RedirectResponse(url=redirect_url, status_code=302)
+            else:
+                raise Exception("Drift calculation failed")
+                
+        except Exception as drift_error:
+            print(f"Drift calculation error: {drift_error}")
+            # Fallback to simple calculation
+            new_lat = lat + 0.1
+            new_lon = lon + 0.1
+            drift_distance = 11.1
+            
+            # Get search pattern recommendation for fallback
+            pattern_name, pattern_desc = recommend_search_pattern(hours, drift_distance)
+            
+            redirect_url = f"/result?orig_lat={lat}&orig_lon={lon}&new_lat={new_lat}&new_lon={new_lon}&drift_distance={drift_distance}&object_type={object_type}&hours={hours}&error=drift_calc_failed&search_pattern_name={pattern_name}&search_pattern_description={pattern_desc}"
+            return RedirectResponse(url=redirect_url, status_code=302)
+        
+    except Exception as e:
+        print(f"Form processing error: {e}")
+        # If there's an error, redirect to results page with error info
+        return RedirectResponse(url=f"/result?error=true&message={str(e)}", status_code=302)
 
 # Make sure these functions are available for import
 __all__ = [

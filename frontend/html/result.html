@@ -3,122 +3,194 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Drift Result - DriftTracker</title>
-    <link rel="stylesheet" href="/static/css/style.css">
+    <title>DriftTracker - Results</title>
+    <link rel="stylesheet" href="/static/css/style.css?v=2">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet-velocity/dist/leaflet-velocity.min.css" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Debugging help -->
-    <script>
-        console.log("Result page loaded");
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log("DOM loaded");
-            // List all CSS files loaded
-            const styleSheets = Array.from(document.styleSheets);
-            console.log("Loaded stylesheets:", styleSheets.map(s => s.href));
-        });
-    </script>
 </head>
 <body>
-{% if error %}
-<div class="error-container">
-    <h1>Error Occurred</h1>
-    <p>{{ error_message }}</p>
-    <pre>{{ error_details }}</pre>
-    <a href="/" class="btn">Go Back</a>
-</div>
-{% else %}
 <div class="container">
     <aside class="sidebar">
         <h2>Drift Results</h2>
-
-        <div class="result-item animate-in" style="animation-delay: 0.1s">
-            <p>
-                <strong><i class="fas fa-map-marker-alt"></i> Original Location</strong>
-                <span class="result-value">{{ orig_lat }}, {{ orig_lon }}</span>
-            </p>
+        
+        <div class="results-summary">
+            <h3><i class="fas fa-info-circle"></i> Drift Summary</h3>
+            <div class="summary-grid">
+                <div class="summary-item">
+                    <label>Starting Position:</label>
+                    <span id="start-position">Loading...</span>
+                </div>
+                <div class="summary-item">
+                    <label>Final Position:</label>
+                    <span id="final-position">Loading...</span>
+                </div>
+                <div class="summary-item">
+                    <label>Drift Distance:</label>
+                    <span id="drift-distance">Loading...</span>
+                </div>
+                <div class="summary-item">
+                    <label>Object Type:</label>
+                    <span id="object-type">Loading...</span>
+                </div>
+                <div class="summary-item">
+                    <label>Search Pattern:</label>
+                    <span id="search-pattern">Loading...</span>
+                </div>
+            </div>
         </div>
 
-        <div class="result-item animate-in" style="animation-delay: 0.2s">
-            <p>
-                <strong><i class="fas fa-location-arrow"></i> Predicted Location</strong>
-                <span class="result-value">{{ new_lat }}, {{ new_lon }}</span>
-            </p>
+        <div class="trajectory-details">
+            <h3><i class="fas fa-route"></i> Trajectory Details</h3>
+            <div id="trajectory-table">
+                <p>Loading trajectory data...</p>
+            </div>
         </div>
 
-        <div class="result-item animate-in" style="animation-delay: 0.3s">
-            <p>
-                <strong><i class="far fa-clock"></i> Elapsed Time</strong>
-                <span class="result-value">{{ elapsed_hours }} hours</span>
-            </p>
-        </div>
-
-        <div class="result-item animate-in" style="animation-delay: 0.4s">
-            <p>
-                <strong><i class="fas fa-route"></i> Drift Distance</strong>
-                <span class="result-value">{{ drift_km }} km</span>
-            </p>
-        </div>
-
-        <div class="result-item animate-in" style="animation-delay: 0.5s">
-            <p>
-                <strong><i class="fas fa-life-ring"></i> Object</strong>
-                <span class="result-value">{{ object_type }}</span>
-            </p>
-        </div>
-
-        {% if object_type == 'Person' %}
-        <div class="result-item animate-in" style="animation-delay: 0.6s">
-            <p>
-                <strong><i class="fas fa-vest-patches"></i> Life Jacket</strong>
-                <span class="result-value">{{ life_jacket }}</span>
-            </p>
-        </div>
-
-        <div class="result-item animate-in" style="animation-delay: 0.7s">
-            <p>
-                <strong><i class="fas fa-user"></i> Age Group</strong>
-                <span class="result-value">{{ age_group }}</span>
-            </p>
-        </div>
-        {% endif %}
-
-        <div class="search-pattern animate-in" style="animation-delay: 0.8s">
-            <strong><span class="search-pattern-icon"></span> Recommended Search Pattern</strong>
-            <span class="result-value">{{ search_pattern }}</span>
-            <p class="note"><em>{{ pattern_reason }}</em></p>
-        </div>
-
-        <div style="display: flex; justify-content: center; width: 100%; margin-top: 16px;">
-            <a class="btn" href="/"><i class="fas fa-redo"></i> New Prediction</a>
+        <div class="info-section">
+            <a href="/" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Calculator
+            </a>
         </div>
     </aside>
 
     <main class="main-content">
-        <h1>Predicted Drift Path</h1>
-        <p>Based on calculated drift from incident location to estimated current position.</p>
+        <h1>Drift Trajectory Map</h1>
+        <p>Visualization of the calculated drift path and final position.</p>
+        
         <div id="map"></div>
     </main>
 </div>
-{% endif %}
 
-<script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet-velocity/dist/leaflet-velocity.min.js"></script>
-<script src="/static/map.js"></script>
-<script>
-    try {
-        const intervalPositions = {{ interval_positions|safe }};
-        // Check if the map.js file loaded correctly
-        if (typeof initMap === 'function') {
-            console.log("Map initialization function exists");
-            initMap({{ orig_lat }}, {{ orig_lon }}, {{ new_lat }}, {{ new_lon }}, intervalPositions);
-        } else {
-            console.error("Map initialization function is missing - check if map.js loaded correctly");
+    <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-velocity/dist/leaflet-velocity.min.js"></script>
+    <script src="/static/js/map.js"></script>
+    <script>
+        function getDriftData() {
+            const urlParams = new URLSearchParams(window.location.search);
+            let trajectory = [];
+            try {
+                const trajectoryParam = urlParams.get('trajectory');
+                if (trajectoryParam) {
+                    trajectory = JSON.parse(decodeURIComponent(trajectoryParam));
+                    trajectory = trajectory.map((point, index) => ({
+                        lat: point.lat,
+                        lon: point.lon,
+                        hours: point.hours_elapsed || index,
+                        timestamp: new Date(Date.now() + (point.hours_elapsed || index) * 3600000).toISOString()
+                    }));
+                }
+            } catch (e) {
+                console.warn('Could not parse trajectory data:', e);
+            }
+            return {
+                orig_lat: parseFloat(urlParams.get('orig_lat')) || 52.5,
+                orig_lon: parseFloat(urlParams.get('orig_lon')) || 4.2,
+                new_lat: parseFloat(urlParams.get('new_lat')) || 52.6,
+                new_lon: parseFloat(urlParams.get('new_lon')) || 4.3,
+                drift_distance: parseFloat(urlParams.get('drift_distance')) || 0,
+                object_type: urlParams.get('object_type') || 'Unknown',
+                hours: parseFloat(urlParams.get('hours')) || 6,
+                trajectory: trajectory,
+                error: urlParams.get('error') === 'true',
+                message: urlParams.get('message') || ''
+            };
         }
-    } catch (e) {
-        console.error("Map failed to initialize:", e);
-    }
-</script>
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const data = getDriftData();
+            const urlParams = new URLSearchParams(window.location.search); // Add this line
+            
+            if (data.error) {
+                document.getElementById('start-position').textContent = 'Error occurred';
+                document.getElementById('final-position').textContent = data.message || 'Unknown error';
+                return;
+            }
+
+            document.getElementById('start-position').textContent = `${data.orig_lat.toFixed(2)}°N, ${data.orig_lon.toFixed(2)}°E`;
+            document.getElementById('final-position').textContent = `${data.new_lat.toFixed(2)}°N, ${data.new_lon.toFixed(2)}°E`;
+            document.getElementById('drift-distance').textContent = `${data.drift_distance.toFixed(2)} km`;
+            document.getElementById('object-type').textContent = data.object_type;
+            // Get search pattern from URL or use default
+            const searchPattern = urlParams.get('search_pattern_name') || 'Parallel Sweep';
+            const searchPatternDesc = urlParams.get('search_pattern_description') || 'Large coverage when drift is wide or time is long.';
+            document.getElementById('search-pattern').textContent = `${searchPattern} - ${searchPatternDesc}`;
+
+            updateTrajectoryTable(data.trajectory);
+
+            if (typeof L !== 'undefined') {
+                setTimeout(() => {
+                    if (typeof initMap === 'function') {
+                        try {
+                            initMap(data.orig_lat, data.orig_lon, data.new_lat, data.new_lon, data.trajectory || []);
+                        } catch (error) {
+                            createSimpleMap(data.orig_lat, data.orig_lon, data.new_lat, data.new_lon, data.trajectory);
+                        }
+                    } else {
+                        createSimpleMap(data.orig_lat, data.orig_lon, data.new_lat, data.new_lon, data.trajectory);
+                    }
+                }, 1000);
+            } else {
+                createSimpleMap(data.orig_lat, data.orig_lon, data.new_lat, data.new_lon, data.trajectory);
+            }
+        });
+
+        function updateTrajectoryTable(trajectory) {
+            const tableContainer = document.getElementById('trajectory-table');
+            
+            if (!trajectory || trajectory.length === 0) {
+                tableContainer.innerHTML = '<p>No trajectory data available</p>';
+                return;
+            }
+            
+            let tableHTML = `
+                <table class="trajectory-table">
+                    <thead>
+                        <tr>
+                            <th>Time (Hours)</th>
+                            <th>Latitude</th>
+                            <th>Longitude</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            trajectory.forEach((point, index) => {
+                const hours = point.hours || point.hours_elapsed || index;
+                const lat = point.lat.toFixed(2);
+                const lon = point.lon.toFixed(2);
+                
+                tableHTML += `
+                    <tr>
+                        <td>${hours.toFixed(1)}h</td>
+                        <td>${lat}°N</td>
+                        <td>${lon}°E</td>
+                    </tr>
+                `;
+            });
+            
+            tableHTML += '</tbody></table>';
+            tableContainer.innerHTML = tableHTML;
+        }
+
+        function createSimpleMap(origLat, origLon, newLat, newLon, trajectory) {
+            const map = L.map('map').setView([origLat, origLon], 8);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+            
+            L.marker([origLat, origLon]).addTo(map).bindPopup('Start Point');
+            L.marker([newLat, newLon]).addTo(map).bindPopup('End Point');
+            
+            if (trajectory && trajectory.length > 0) {
+                const pathCoords = trajectory.map(point => [point.lat, point.lon]);
+                L.polyline(pathCoords, {color: 'red', weight: 3}).addTo(map);
+            } else {
+                L.polyline([[origLat, origLon], [newLat, newLon]], {color: 'red', weight: 3, dashArray: '5, 10'}).addTo(map);
+            }
+        }
+    </script>
 </body>
 </html>
